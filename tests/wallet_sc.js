@@ -100,6 +100,39 @@ LANGUE='en';
   .forEach(k=>{ (T(k)!==k) ? ok('traduit : '+k.slice(0,34)) : ko('NON TRADUIT : '+k); });
 LANGUE='fr';
 
+/* ---- 6. Budget de temps : signature + cache < duree de vie du blockhash ---- */
+(DELAI_SIGNATURE<=45000) ? ok('borne de signature : '+(DELAI_SIGNATURE/1000)+' s') : ko('borne trop longue : '+(DELAI_SIGNATURE/1000)+' s');
+(typeof BH_VIE==='number') ? ok('duree de vie du blockhash declaree : '+(BH_VIE/1000)+' s') : ko('BH_VIE absente');
+/* Ce qui compte n'est pas BH_FENETRE seule, mais la fenetre REELLEMENT
+   utilisable une fois la signature deduite : blockhashFrais(marge) refuse de
+   servir un blockhash qui n'y survivrait pas. */
+const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE);
+(fenetreUtile > 0)
+  ? ok('fenetre de cache utile avant signature : '+(fenetreUtile/1000)+' s (le cache sert encore aux envois rapproches)')
+  : ko('BUDGET NUL : signature '+(DELAI_SIGNATURE/1000)+' s >= vie du blockhash '+(BH_VIE/1000)+' s, plus aucun cache possible');
+(fenetreUtile >= 10000)
+  ? ok('assez large pour absorber un double appui et une rafale') : ko('fenetre trop courte : '+(fenetreUtile/1000)+' s');
+
+/* Un blockhash trop vieux pour survivre a la signature doit etre renouvele */
+let demandes=0;
+_impl_bh = async()=>{ demandes++; return {blockhash:'BH'+demandes}; };
+CHAINE.connexion={ getLatestBlockhash:(...a)=>_impl_bh(...a), sendRawTransaction:async()=>'5'.repeat(64) };
+CHAINE.bhCache='VIEUX'; CHAINE.bhTemps=Date.now()-30000;   /* 30 s d'age */
+const bhCourt = await blockhashFrais(0);
+(bhCourt==='VIEUX') ? ok('sans attente prevue : le cache de 30 s est reutilise') : ko('cache ignore a tort');
+CHAINE.bhCache='VIEUX'; CHAINE.bhTemps=Date.now()-30000;
+const bhLong = await blockhashFrais(DELAI_SIGNATURE);
+(bhLong!=='VIEUX') ? ok('avec 45 s de signature devant : blockhash renouvele au lieu d\'expirer') : ko('BLOCKHASH PERIME SERVI : la TX sera rejetee');
+
+/* ---- 7. Timeout : le message depend de qui diffuse ---- */
+CHAINE.canalAuto=false;
+(/réessaie/.test(causeLisible(new Error('timeout:signature')))) ? ok('diffusion locale : "'+causeLisible(new Error('timeout:signature'))+'"') : ko('message : '+causeLisible(new Error('timeout:signature')));
+CHAINE.canalAuto=true;
+(/journal/.test(causeLisible(new Error('timeout:signature')))) ? ok('diffusion par le wallet : "'+causeLisible(new Error('timeout:signature'))+'"') : ko('message : '+causeLisible(new Error('timeout:signature')));
+LANGUE='en';
+(T("le wallet n'a pas répondu · vérifie le journal avant de relancer")!=="le wallet n'a pas répondu · vérifie le journal avant de relancer") ? ok('message adapte traduit') : ko('non traduit');
+LANGUE='fr'; CHAINE.canalAuto=false;
+
 R.forEach(l=>console.log(l));
 const bad=R.filter(l=>l.startsWith('RES KO')).length;
 console.log(bad?'RES '+bad+' ECHECS':'RES TOUS LES TESTS PASSENT');

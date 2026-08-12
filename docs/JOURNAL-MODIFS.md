@@ -232,6 +232,28 @@ contredisaient dans l'interface (4.0 / 4.2 / 4.2), tous alignés sur v4.4.
 
 Détail complet : `docs/REPONSE-NOAH-2.md`.
 
+### Bloc 11 — Budget de temps du blockhash (troisième audit Noah)
+
+`DELAI_SIGNATURE` était à 90 s, alors qu'un blockhash Solana vit 60 à 80 s. Le
+cache de 40 s aggravait le cas : 40 + 50 s de signature = transaction diffusée
+avec un blockhash de 90 s, rejetée en « block height exceeded » alors que le
+joueur avait signé correctement.
+
+Deux mesures complémentaires. `DELAI_SIGNATURE` passe à **45 s**. Et surtout,
+`blockhashFrais(marge)` prend un argument : le cache ne sert un blockhash que
+s'il survivra à l'attente de signature. Fenêtre réellement utilisable quand une
+signature est attendue : 15 s au lieu de 40 — assez pour absorber un double
+appui, jamais assez pour livrer un blockhash condamné.
+
+**Transaction fantôme.** Sur `signAndSendTransaction`, `request` et le Seed
+Vault, c'est le wallet qui diffuse : un délai dépassé n'annule pas sa demande.
+S'il répond après coup, la transaction part quand même et une relance en crée
+une seconde. Vérifier l'historique on-chain avant relance serait trop lourd
+à J-1 ; le message renvoie donc vers le journal plutôt que d'inviter à
+relancer à l'aveugle. Le drapeau `CHAINE.canalAuto` distingue les deux cas.
+
+Détail : `docs/REPONSE-NOAH-3.md`.
+
 ---
 
 ## État des tests

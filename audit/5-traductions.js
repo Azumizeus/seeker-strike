@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 5-traductions.js
    Table de traduction FR vers EN
-   Lignes 5599 a 6322 du script (game/index_v37.html)
+   Lignes 5638 a 6362 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -510,6 +510,7 @@ const EN = {
 "PATIENTE": "WAIT",
 "SIGNATURE EN COURS…": "SIGNING…",
 "le wallet n'a pas répondu, réessaie": "the wallet did not respond, try again",
+"le wallet n'a pas répondu · vérifie le journal avant de relancer": "the wallet did not respond · check the journal before resending",
 "transaction déjà envoyée, patiente un instant": "transaction already sent, wait a moment",
 "le wallet a refusé sans préciser la raison": "the wallet declined without giving a reason",
 "Patiente": "Hold on",

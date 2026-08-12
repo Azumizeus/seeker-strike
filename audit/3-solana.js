@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 3-solana.js
    Integration Solana : wallet, signatures, RPC, paliers
-   Lignes 2109 a 3400 du script (game/index_v37.html)
+   Lignes 2109 a 3439 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -165,9 +165,22 @@ CHAINE.bhCache=null; CHAINE.bhTemps=0;
    le cache reservait la meme valeur morte pendant 40 s et TOUTES les relances
    echouaient d'affilee. */
 function invaliderBlockhash(){ CHAINE.bhCache=null; CHAINE.bhTemps=0; }
-async function blockhashFrais(){
+/* Duree de vie prudente d'un blockhash : 150 blocs, soit 60 a 80 s selon la
+   charge. On retient la borne basse.
+   Budget : BH_FENETRE (40 s) couvre les appels sans attente ; des qu'une
+   signature est attendue (45 s), la fenetre reellement utilisable tombe a
+   BH_VIE - DELAI_SIGNATURE = 15 s. C'est voulu et suffisant : le cache existe
+   pour absorber un double appui et les envois rapproches, pas pour durer. */
+const BH_VIE = 60000;
+/* `marge` = temps qui va encore s'ecouler avant la diffusion, typiquement
+   l'attente de signature. Un blockhash de 39 s garde en cache, suivi de 45 s
+   de signature, arrivait perime sur le reseau : on en reprend un frais si le
+   compte n'y est pas. */
+async function blockhashFrais(marge){
+  const m = (typeof marge==='number') ? marge : 0;
   const now=Date.now();
-  if(CHAINE.bhCache && now-CHAINE.bhTemps < BH_FENETRE) return CHAINE.bhCache;
+  const age = now - CHAINE.bhTemps;
+  if(CHAINE.bhCache && age < BH_FENETRE && age + m < BH_VIE) return CHAINE.bhCache;
   let derniere=null;
   /* Au moins un essai par endpoint, plus une reprise sur le premier. */
   const essais = Math.max(4, RPC_DEVNET.length+2);
@@ -220,7 +233,13 @@ function causeLisible(e){
   if(/blockhash not found|block height exceeded/i.test(brut)) return 'transaction expirée, relance-la';
   if(/insufficient|0x1\b/i.test(brut)) return 'solde SOL devnet insuffisant';
   /* Le wallet n'a jamais repondu : ce n'est pas un refus, on invite a reessayer. */
-  if(/^timeout:/.test(brut)) return 'le wallet n\'a pas répondu, réessaie';
+  if(/^timeout:/.test(brut)){
+    /* Si c'est le wallet qui diffuse, sa demande peut encore aboutir apres
+       coup : on invite a verifier le journal plutot qu'a relancer aveugle. */
+    return CHAINE.canalAuto
+      ? 'le wallet n\'a pas répondu · vérifie le journal avant de relancer'
+      : 'le wallet n\'a pas répondu, réessaie';
+  }
   /* Solflare dit « Transaction rejected », Backpack renvoie le code 4001 :
      ni l'un ni l'autre n'etait reconnu, le joueur voyait l'anglais brut. */
   if(/reject|refus|declined|denied|cancell?ed|\b4001\b/i.test(brut)) return 'signature refusée dans le wallet';
@@ -277,7 +296,12 @@ async function retrouverProvider(){
    ne se resout NI ne rejette. Le `finally` de envoyerTxSeeker ne s'execute
    alors jamais, le verrou reste pose et le bouton reste grise pour de bon.
    Toute attente d'un wallet passe donc par une borne de temps. */
-const DELAI_SIGNATURE = 90000;   /* le joueur doit avoir le temps de lire */
+/* 45 s, pas 90 : un blockhash Solana vit environ 150 blocs, soit 60 a 80 s.
+   Attendre 90 s une signature, c'est diffuser une transaction deja perimee —
+   le joueur signe correctement et se voit refuser en « block height
+   exceeded ». 45 s suffisent largement pour basculer sur le wallet,
+   s'authentifier et confirmer. */
+const DELAI_SIGNATURE = 45000;
 const DELAI_RECONNEXION = 30000;
 function avecDelai(promesse, ms, quoi){
   let t;
@@ -288,6 +312,14 @@ function avecDelai(promesse, ms, quoi){
 }
 async function signerEtEnvoyer(tx){
   let sig=null;
+  /* Deux familles de canaux, et un delai depasse n'a pas le meme sens :
+     - signTransaction : NOUS diffusons. Un timeout survient avant l'envoi,
+       rien n'existe on-chain, la relance est sans danger.
+     - signAndSendTransaction / request / Seed Vault : LE WALLET diffuse. Un
+       timeout n'annule pas sa demande ; s'il repond apres coup, la
+       transaction part quand meme. Relancer a l'aveugle en cree deux.
+     On retient le canal pour adapter le message. */
+  CHAINE.canalAuto = false;
   /* Une extension connectee avant un rechargement doit etre retrouvee,
      sinon on basculait a tort vers le Seed Vault. */
   await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
@@ -297,14 +329,17 @@ async function signerEtEnvoyer(tx){
        signAndSendTransaction diffuserait sur le reseau selectionne dans le
        wallet (mainnet par defaut) : notre blockhash devnet y est inconnu. */
     if(typeof p.signTransaction==='function'){
+      CHAINE.canalAuto = false;              /* c'est nous qui diffusons */
       const signee = await avecDelai(p.signTransaction(tx), DELAI_SIGNATURE, 'signature');
       sig = await diffuser(signee.serialize());
       LOG.log('[SEEKER] signature via wallet puis diffusion devnet');
     } else if(typeof p.signAndSendTransaction==='function'){
+      CHAINE.canalAuto = true;               /* le wallet diffuse lui-meme */
       const r = await avecDelai(p.signAndSendTransaction(tx), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via wallet (signAndSendTransaction)');
     } else if(typeof p.request==='function'){
+      CHAINE.canalAuto = true;
       const r = await avecDelai(p.request({ method:'signAndSendTransaction', params:{ message: tx } }), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via extension (request)');
@@ -326,7 +361,9 @@ async function signerEtEnvoyer(tx){
     }
     const mwa = await initMWA();
     if(!mwa || !mwa.transact){ CHAINE.derniereErreur='module Seed Vault non charge'; return null; }
-    /* Le Seed Vault peut lui aussi ne jamais revenir : meme borne. */
+    /* Le Seed Vault peut lui aussi ne jamais revenir : meme borne. C'est lui
+       qui diffuse, donc un timeout n'annule pas forcement l'envoi. */
+    CHAINE.canalAuto = true;
     const sigs = await avecDelai(mwa.transact(async (wallet)=>{
       const jeton = localStorage.getItem('ss_mwa_token');
       if(jeton){ try{ await wallet.reauthorize({ auth_token:jeton, identity:IDENTITE }); }catch(e){} }
@@ -433,7 +470,9 @@ async function envoyerTxSeeker(action){
       LOG.log('[SEEKER] adresse convertie en base58');
     }
     const joueur = new PublicKey(adresse);
-    const blockhash = await blockhashFrais();
+    /* La transaction va attendre la signature du joueur : on demande un
+       blockhash qui sera encore valide a ce moment-la. */
+    const blockhash = await blockhashFrais(DELAI_SIGNATURE);
     const tx = new Transaction({ feePayer: joueur, recentBlockhash: blockhash });
     if(action==='seeker-task'){
       /* Les 15 memos + le pourboire : une transaction, une signature. */
