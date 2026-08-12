@@ -197,11 +197,46 @@ teinté à la couleur du vaisseau (mis en cache), et neutralisé pendant la dém
 qui est justement la vitrine du hangar. Chaque séquence du trailer montre en
 plus une munition différente.
 
+### Bloc 10 — Second audit Noah (v4.4)
+
+Quatre bugs réels sur six signalés. Les deux faux positifs venaient d'`audit/`
+resté en v4.2 — il avait été découpé à la main une fois, jamais régénéré.
+
+**Wallet muet (bloquant).** Aucune borne de temps sur les appels au wallet.
+Fenêtre fermée par le système, application tuée en arrière-plan, WebView
+suspendue : la promesse ne se résout ni ne rejette, le `finally` ne s'exécute
+jamais, le verrou reste posé et le bouton grisé à vie. `avecDelai()` borne
+maintenant les quatre canaux de signature (90 s) et la reconnexion (30 s).
+
+**Mémo non unique.** La branche générique (quêtes) n'avait aucun marqueur :
+avec le blockhash en cache 40 s, deux fois la même action produisaient une
+transaction identique, donc la même signature, rejetée en « already processed ».
+Le correctif à l'horloge seule ne suffisait pas — deux appels dans la même
+milliseconde donnaient la même valeur. `marqueurUnique()` combine l'heure et un
+compteur. Détecté par le test, en échec intermittent sur deux builds.
+
+**Substitution de wallet.** Un joueur Solflare dont l'extension tarde à
+s'injecter se voyait servir Phantom, et son adresse écrasée sans un mot. On ne
+cherche plus ailleurs quand un wallet a été explicitement choisi.
+
+**Messages d'erreur.** Ajout de `timeout:`, du code `4001` (Backpack) et
+d'`already been processed`. Et `String({})` ne rend pas une chaîne vide mais
+`[object Object]`, qui s'affichait tel quel au joueur.
+
+**Bouton figé.** Rien ne rafraîchissait le bouton pendant l'envoi : c'est ce
+qui rendait le blocage invisible. Trois états désormais.
+
+**`game/build_audit.py`.** Régénère `audit/` par ancres textuelles, retire les
+base64, inscrit la version dans chaque en-tête. Trois libellés de version se
+contredisaient dans l'interface (4.0 / 4.2 / 4.2), tous alignés sur v4.4.
+
+Détail complet : `docs/REPONSE-NOAH-2.md`.
+
 ---
 
 ## État des tests
 
-`tests/run.sh` : **115 exécutions** — 34 scénarios × 3 builds + 4 suites jsdom.
+`tests/run.sh` : **118 exécutions** — 34 scénarios × 3 builds + 4 suites jsdom.
 
 Vérifié ce soir, tout au vert :
 

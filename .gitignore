@@ -20,3 +20,6 @@ game/assets_opt/
 # Fichiers temporaires
 *.tmp
 docs/_test.*
+
+# Sources graphiques : utiles en local, inutiles dans le depot
+logo , icone , banniere ecosysteme Seeke Nexus/

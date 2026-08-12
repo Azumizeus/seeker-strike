@@ -1,10 +1,10 @@
 /* ============================================================
-   SEEKER STRIKE v4.2 - 6-outils.js
-   Outils et ecrans restants
-   Lignes 5750 a 6797 du script d'origine (game/index_v37.html)
-   Images base64 retirees : elles ne concernent pas l'audit.
+   SEEKER STRIKE v4.4 - 6-outils.js
+   Traduction, ecrans, reglages, easter eggs
+   Lignes 6322 a 7371 du script (game/index_v37.html)
+   Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
+   La source de verite est game/index_v37.html.
    ============================================================ */
-
 function T(fr, ...args){
   let t = (LANGUE==='en' && EN[fr]) ? EN[fr] : fr;
   args.forEach((v,i)=>{ t = t.split('{'+i+'}').join(v); });
@@ -777,6 +777,8 @@ function basculerTerminalCarte(){
   const el=document.getElementById('terminal-carte'); if(!el) return;
   el.classList.toggle('ouvert');
   S.termOuvert=el.classList.contains('ouvert');
+  const ong=document.getElementById('term-onglet');
+  if(ong) ong.setAttribute('aria-expanded', S.termOuvert?'true':'false');
   Audio2.jouerSfx('button_click'); haptique('bouton');
   if(S.termOuvert) majTerminalCarte();
   save();
@@ -820,7 +822,7 @@ function majTerminalCarte(){
 
   /* Bloc chaine : purement informatif */
   h+= ligneTerm('cluster', 'devnet')
-    + ligneTerm('rpc', 'api.devnet')
+    + ligneTerm('rpc', String(CHAINE.rpc||'').replace(/^https?:\/\//,'').split('/')[0])
     + ligneTerm('tx', txCumulees())
     + ligneTerm(T('wallet'), S.walletReel ? txtSur(S.address||'ok') : T('non connecté'));
 
@@ -1052,4 +1054,3 @@ document.getElementById('logo').addEventListener('click',()=>{
 
 load();
 document.addEventListener('gesturestart',e=>e.preventDefault());
-

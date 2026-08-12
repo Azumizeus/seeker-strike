@@ -1,6 +1,6 @@
-<!-- SEEKER STRIKE v4.2 - PARTIE 1/6 : interface (HTML + CSS)
-     Le script est decoupe dans les fichiers 2 a 6.
-     Images base64 retirees : 86% du poids, aucun interet ici. -->
+<!-- SEEKER STRIKE v4.4 - 1-interface.html
+     Structure HTML et CSS, hors script. Images base64 retirees.
+     Genere par game/build_audit.py — NE PAS EDITER A LA MAIN. -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -11,7 +11,7 @@
 <meta name="description" content="Seeker Strike — Genesis Protocol : shoot'em up spatial pour Solana Seeker."/>
 <meta property="og:title" content="Seeker Strike — Genesis Protocol"/>
 <meta property="og:description" content="Shoot'em up spatial mobile-first pour Solana Seeker."/>
-<link rel="icon" type="image/png" href="data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/"/>
+<link rel="icon" type="image/png" href="data:image/…;base64,<retiré>"/>
 <link rel="apple-touch-icon" href="assets/inline/icone180.png"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <!-- Verrouillage portrait : ces trois metas sont lues par les WebViews Android
@@ -19,8 +19,8 @@
 <meta name="screen-orientation" content="portrait"/>
 <meta name="x5-orientation" content="portrait"/>
 <meta name="full-screen" content="yes"/>
-<link rel="manifest" href="data:application/manifest+json;base64,/*[IMAGE 0 Ko retiree pour l'audit]*/"/>
-<title>Seeker Strike • Genesis Protocol v4.0</title>
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlNlZWtlciBTdHJpa2Ug4oCUIEdlbmVzaXMgUHJvdG9jb2wiLCAic2hvcnRfbmFtZSI6ICJTZWVrZXIgU3RyaWtlIiwgImRlc2NyaXB0aW9uIjogIlNob290J2VtIHVwIHNwYXRpYWwgbW9iaWxlLWZpcnN0IHBvdXIgU29sYW5hIFNlZWtlci4iLCAic3RhcnRfdXJsIjogIi4vIiwgImRpc3BsYXkiOiAiZnVsbHNjcmVlbiIsICJvcmllbnRhdGlvbiI6ICJwb3J0cmFpdCIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwNTA1MGEiLCAidGhlbWVfY29sb3IiOiAiIzA1MDUwYSIsICJjYXRlZ29yaWVzIjogWyJnYW1lcyIsICJlbnRlcnRhaW5tZW50Il19"/>
+<title>Seeker Strike • Genesis Protocol v4.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--p:#9945FF;--g:#14F195;--bg:#05050a}
@@ -42,7 +42,14 @@ button.glass{color:#fff !important;background:rgba(14,14,26,.95) !important}
 #s-map{padding:0 !important;overflow:hidden !important}
 #s-map.active{display:block !important}
 #map-nodes-visual{position:absolute;inset:0;z-index:10;pointer-events:auto}
-.screen{display:none;height:100dvh;min-height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Le conteneur qui defile doit faire EXACTEMENT la hauteur visible.
+   Avec min-height:100vh il devenait plus haut que la fenetre sur mobile
+   (100vh ignore la barre d'URL, pas 100dvh) : son overflow ne se
+   declenchait jamais, et body etant en overflow:hidden, plus rien ne
+   defilait nulle part. Les deux declarations de hauteur servent de repli
+   pour les navigateurs qui ignorent dvh. */
+.screen{display:none;height:100vh;height:100dvh;max-height:100dvh;
+  overflow-y:auto;-webkit-overflow-scrolling:touch}
 /* Zone tampon sous le dernier bloc.
    Deux pieges cumules :
    1. le padding-bottom d'un conteneur scrollable est ignore par WebKit
@@ -338,18 +345,18 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
 #s-ships   {--fond:var(--bg-ships)}
 #s-map     {--fond:none}
 :root{
-  --bg-home:    url('data:image/jpeg;base64,/*[IMAGE 34 Ko retiree pour l'audit]*/');
-  --bg-prep:    url('data:image/jpeg;base64,/*[IMAGE 47 Ko retiree pour l'audit]*/');
-  --bg-shop:    url('data:image/jpeg;base64,/*[IMAGE 36 Ko retiree pour l'audit]*/');
-  --bg-quests:  url('data:image/jpeg;base64,/*[IMAGE 63 Ko retiree pour l'audit]*/');
-  --bg-settings:url('data:image/jpeg;base64,/*[IMAGE 27 Ko retiree pour l'audit]*/');
-  --bg-multi:   url('data:image/jpeg;base64,/*[IMAGE 34 Ko retiree pour l'audit]*/');
-  --bg-ships:   url('data:image/jpeg;base64,/*[IMAGE 59 Ko retiree pour l'audit]*/');
+  --bg-home:    url('data:image/…;base64,<retiré>');
+  --bg-prep:    url('data:image/…;base64,<retiré>');
+  --bg-shop:    url('data:image/…;base64,<retiré>');
+  --bg-quests:  url('data:image/…;base64,<retiré>');
+  --bg-settings:url('data:image/…;base64,<retiré>');
+  --bg-multi:   url('data:image/…;base64,<retiré>');
+  --bg-ships:   url('data:image/…;base64,<retiré>');
 }
 /* --- Fond de jeu : CSS compose par le GPU + canvas transparent au-dessus --- */
 #s-solo{position:relative;background:#030308}
 .jeu-fond{position:absolute;left:0;right:0;top:-6%;height:112%;z-index:0;pointer-events:none;
-  background:url('data:image/jpeg;base64,/*[IMAGE 54 Ko retiree pour l'audit]*/') center/cover no-repeat;opacity:.60}
+  background:url('data:image/…;base64,<retiré>') center/cover no-repeat;opacity:.60}
 .jeu-fond.couche2{opacity:.28;animation:derive 26s linear infinite}
 @keyframes derive{from{transform:translate3d(0,-6%,0)}to{transform:translate3d(0,6%,0)}}
 #gc{position:relative;z-index:1}
@@ -567,7 +574,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
 </div>
 
 <!-- ===== CHOIX DE LA LANGUE — premiere ouverture uniquement ===== -->
-<div id="choix-langue" aria-hidden="true">
+<div id="choix-langue" role="dialog" aria-modal="true" aria-label="Choisir la langue / Choose your language">
   <div class="boite">
     <div class="marque"></div>
     <div class="tt">CHOISIS TA LANGUE</div>
@@ -594,7 +601,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
   </div>
 </div>
 
-<div id="voile-rotation" aria-hidden="true">
+<div id="voile-rotation" role="alertdialog" aria-label="Tourne ton telephone / Turn your phone">
   <div class="tel"></div>
   <b>TOURNE TON T&Eacute;L&Eacute;PHONE</b>
   <span>Seeker Strike se joue en mode portrait : le terrain vertical fait tout le gameplay. La partie reprend d&egrave;s que tu reviens.</span>
@@ -616,7 +623,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
           <div id="logo" class="pastille" title="Seeker Nexus"></div>
           <div style="flex:1;min-width:0">
             <h1>SEEKER STRIKE</h1>
-            <div class="ver">GENESIS PROTOCOL v4.2 &bull; <span style="color:#fbbf24">DEVNET</span></div>
+            <div class="ver">GENESIS PROTOCOL v4.4 &bull; <span style="color:#fbbf24">DEVNET</span></div>
           </div>
           <button onclick="show('settings')" aria-label="R&eacute;glages" class="glass w-9 h-9 rounded-xl flex items-center justify-center" style="flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="#c4b5fd"><path d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.07-1.58zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg></button>
         </div>
@@ -677,7 +684,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
         <div id="air-badge" class="hidden px-2 py-0.5 rounded-full text-[9px] font-bold bg-gradient-to-r from-green-400 to-purple-500 text-black" style="flex:none;align-self:center">&#9989; &Eacute;LIGIBLE</div>
       </div>
       <div class="bar"><div id="tx-bar" style="width:0%"></div></div>
-      <button onclick="envoyerSeekerTask()" id="btn-task" class="btn w-full py-2 rounded-xl text-[11px] font-bold" style="background:linear-gradient(135deg,#0891b2,#14F195)">ENVOYER 1 TX</button>
+      <button onclick="envoyerSeekerTask()" id="btn-task" class="btn w-full py-2 rounded-xl text-[11px] font-bold" style="background:linear-gradient(135deg,#0891b2,#14F195)">ENVOYER LES 15 TX</button>
       <div style="font-size:9.5px;color:#7c7a8c;line-height:1.5;margin-top:-2px">Les 15 m&eacute;mos partent group&eacute;s dans <b>une seule transaction</b> Solana devnet : tu ne signes qu&rsquo;une fois. Relan&ccedil;able quand tu veux. Un soutien de 0.001 SOL est inclus &mdash; le gameplay, lui, reste 100% GC.</div>
     </div>
 
@@ -724,8 +731,8 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
 <div id="s-map" class="screen" style="padding:0; overflow:hidden;">
   <!-- Terminal de bord : hors du conteneur qui defile, sinon il sortait de
        l'ecran des qu'on descendait sur la carte. Debloque par l'easter egg DEVNET. -->
-  <div id="terminal-carte" class="hidden" aria-hidden="true">
-    <button id="term-onglet" onclick="basculerTerminalCarte()" aria-label="Terminal de bord">
+  <div id="terminal-carte" class="hidden">
+    <button id="term-onglet" onclick="basculerTerminalCarte()" aria-label="Terminal de bord" aria-expanded="false">
       <span class="pt">T E R M I N A L</span>
     </button>
     <div id="term-corps"><div id="term-int"></div></div>
@@ -1064,11 +1071,12 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
       <button onclick="askResetCache()" class="btn-dark w-full py-2.5 rounded-xl text-[11.5px] font-bold">VIDER LE CACHE</button>
     </div>
 
+    <div id="panneau-rpc"></div>
     <div id="panneau-dev"></div>
       <div id="panneau-paliers"></div>
       <div id="panneau-journal"></div>
       <div id="panneau-dons"></div>
-    <div onclick="tapVersion()" class="text-center text-[9.5px] text-gray-600 mt-5" style="cursor:pointer;user-select:none">Seeker Strike &bull; Genesis Protocol v4.2 &bull; <span onclick="tapDevnet(event)" style="color:#fbbf24;cursor:pointer">DEVNET</span></div>
+    <div onclick="tapVersion()" class="text-center text-[9.5px] text-gray-600 mt-5" style="cursor:pointer;user-select:none">Seeker Strike &bull; Genesis Protocol v4.4 &bull; <span onclick="tapDevnet(event)" style="color:#fbbf24;cursor:pointer">DEVNET</span></div>
   </div>
 </div>
 
@@ -1086,16 +1094,11 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
 </div>
 
 <nav class="nav" id="main-nav">
-  <button class="nav-i active" data-s="home" onclick="show('home')"><img src="data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/" alt=""/>Home</button>
-  <button class="nav-i" data-s="map" onclick="show('map')"><img src="data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/" alt=""/>Carte</button>
-  <button class="nav-i" data-s="multi" onclick="show('multi')"><img src="data:image/png;base64,/*[IMAGE 3 Ko retiree pour l'audit]*/" alt=""/>Arena</button>
-  <button class="nav-i" data-s="shop" onclick="show('shop')"><img src="data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/" alt=""/>Shop</button>
-  <button class="nav-i" data-s="quests" onclick="show('quests')" style="position:relative"><span id="badge-quetes" style="display:none;position:absolute;top:2px;right:8px;width:8px;height:8px;border-radius:50%;background:#14F195;box-shadow:0 0 6px #14F195"></span><img src="data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/" alt=""/>Quêtes</button>
-  <button class="nav-i" data-s="settings" onclick="show('settings')"><img src="data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/" alt=""/>R&eacute;glages</button>
+  <button class="nav-i active" data-s="home" onclick="show('home')"><img src="data:image/…;base64,<retiré>" alt=""/>Home</button>
+  <button class="nav-i" data-s="map" onclick="show('map')"><img src="data:image/…;base64,<retiré>" alt=""/>Carte</button>
+  <button class="nav-i" data-s="multi" onclick="show('multi')"><img src="data:image/…;base64,<retiré>" alt=""/>Arena</button>
+  <button class="nav-i" data-s="shop" onclick="show('shop')"><img src="data:image/…;base64,<retiré>" alt=""/>Shop</button>
+  <button class="nav-i" data-s="quests" onclick="show('quests')" style="position:relative"><span id="badge-quetes" style="display:none;position:absolute;top:2px;right:8px;width:8px;height:8px;border-radius:50%;background:#14F195;box-shadow:0 0 6px #14F195"></span><img src="data:image/…;base64,<retiré>" alt=""/>Quêtes</button>
+  <button class="nav-i" data-s="settings" onclick="show('settings')"><img src="data:image/…;base64,<retiré>" alt=""/>R&eacute;glages</button>
 </nav>
 
-<script>
-/* ... script : voir 2-donnees.js a 6-outils.js ... */
-</script>
-</body>
-</html>

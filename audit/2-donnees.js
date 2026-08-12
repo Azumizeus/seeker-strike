@@ -1,10 +1,10 @@
 /* ============================================================
-   SEEKER STRIKE v4.2 - 2-donnees.js
-   Tables de donnees et etat
-   Lignes 1 a 2039 du script d'origine (game/index_v37.html)
-   Images base64 retirees : elles ne concernent pas l'audit.
+   SEEKER STRIKE v4.4 - 2-donnees.js
+   Constantes, etat, donnees de jeu
+   Lignes 1 a 2109 du script (game/index_v37.html)
+   Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
+   La source de verite est game/index_v37.html.
    ============================================================ */
-
 
 /* ============================================================
    SEEKER STRIKE v3.5 — Premium Visual Upgrade
@@ -51,8 +51,8 @@ function loadAssets() {
     // Enemies
     // Projectiles & VFX
     // Collectibles
-    ['orbSol', 'data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/'],
-    ['orbSkr', 'data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/'],
+    ['orbSol', 'data:image/…;base64,<retiré>'],
+    ['orbSkr', 'data:image/…;base64,<retiré>'],
     // Icons
     
   ];
@@ -67,44 +67,44 @@ loadAssets();
 
 /* Slots v3.7 : fichiers PNG dans assets/. Absent = fallback geometrique, aucun crash. */
 /* Sprites critiques : embarques en base64 -> aucun probleme de chemin, meme sans dossier assets/ */
-const ICO = { damage:'data:image/png;base64,/*[IMAGE 5 Ko retiree pour l'audit]*/', speed:'data:image/png;base64,/*[IMAGE 5 Ko retiree pour l'audit]*/', shield:'data:image/png;base64,/*[IMAGE 5 Ko retiree pour l'audit]*/', health:'data:image/png;base64,/*[IMAGE 8 Ko retiree pour l'audit]*/' };
+const ICO = { damage:'data:image/…;base64,<retiré>', speed:'data:image/…;base64,<retiré>', shield:'data:image/…;base64,<retiré>', health:'data:image/…;base64,<retiré>' };
 const ASSETS_INLINE = [
-  ['icoCadence','data:image/png;base64,/*[IMAGE 12 Ko retiree pour l'audit]*/'],
-  ['icoSpread','data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/'],
-  ['icoBoost','data:image/png;base64,/*[IMAGE 13 Ko retiree pour l'audit]*/'],
-  ['icoScan','data:image/png;base64,/*[IMAGE 32 Ko retiree pour l'audit]*/'],
-  ['icoArme','data:image/png;base64,/*[IMAGE 14 Ko retiree pour l'audit]*/'],
-  ['icoLot','data:image/png;base64,/*[IMAGE 54 Ko retiree pour l'audit]*/'],
-  ['orbSol','data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/'],
-  ['orbSkr','data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/'],
-    ['cxSniper','data:image/png;base64,/*[IMAGE 10 Ko retiree pour l'audit]*/'],
-    ['ship0','data:image/png;base64,/*[IMAGE 14 Ko retiree pour l'audit]*/'],
-    ['ship1','data:image/png;base64,/*[IMAGE 12 Ko retiree pour l'audit]*/'],
-    ['ship2','data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/'],
-    ['ship4','data:image/png;base64,/*[IMAGE 15 Ko retiree pour l'audit]*/'],
-    ['bonusMitra','data:image/png;base64,/*[IMAGE 8 Ko retiree pour l'audit]*/'],
-    ['bonusGhost','data:image/png;base64,/*[IMAGE 10 Ko retiree pour l'audit]*/'],
-    ['nodeDone','data:image/png;base64,/*[IMAGE 10 Ko retiree pour l'audit]*/'],
-    ['nodeLock','data:image/png;base64,/*[IMAGE 5 Ko retiree pour l'audit]*/'],
-    ['nodePlay','data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/'],
-    ['uiMap','data:image/png;base64,/*[IMAGE 14 Ko retiree pour l'audit]*/'],
-    ['uiQuests','data:image/png;base64,/*[IMAGE 5 Ko retiree pour l'audit]*/'],
-    ['uiRules','data:image/png;base64,/*[IMAGE 11 Ko retiree pour l'audit]*/'],
-    ['uiArena','data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/'],
-    ['uiShop','data:image/png;base64,/*[IMAGE 8 Ko retiree pour l'audit]*/'],
-    ['uiSon','data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/'],
-    ['uiMusique','data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/'],
-    ['uiVictoire','data:image/png;base64,/*[IMAGE 13 Ko retiree pour l'audit]*/'],
-    ['enemyBouclier','data:image/png;base64,/*[IMAGE 10 Ko retiree pour l'audit]*/'],
-    ['enemyTeleport','data:image/png;base64,/*[IMAGE 11 Ko retiree pour l'audit]*/'],
-    ['ammoPerf','data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/'],
-    ['ammoScatter','data:image/png;base64,/*[IMAGE 10 Ko retiree pour l'audit]*/'],
-    ['ammoHoming','data:image/png;base64,/*[IMAGE 3 Ko retiree pour l'audit]*/'],
-    ['icoScore','data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/'],
-    ['icoWarning','data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/'],
-    ['enemyChasseur','data:image/png;base64,/*[IMAGE 12 Ko retiree pour l'audit]*/'],
-    ['enemyTireur','data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/'],
-    ['enemyTank','data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/'],
+  ['icoCadence','data:image/…;base64,<retiré>'],
+  ['icoSpread','data:image/…;base64,<retiré>'],
+  ['icoBoost','data:image/…;base64,<retiré>'],
+  ['icoScan','data:image/…;base64,<retiré>'],
+  ['icoArme','data:image/…;base64,<retiré>'],
+  ['icoLot','data:image/…;base64,<retiré>'],
+  ['orbSol','data:image/…;base64,<retiré>'],
+  ['orbSkr','data:image/…;base64,<retiré>'],
+    ['cxSniper','data:image/…;base64,<retiré>'],
+    ['ship0','data:image/…;base64,<retiré>'],
+    ['ship1','data:image/…;base64,<retiré>'],
+    ['ship2','data:image/…;base64,<retiré>'],
+    ['ship4','data:image/…;base64,<retiré>'],
+    ['bonusMitra','data:image/…;base64,<retiré>'],
+    ['bonusGhost','data:image/…;base64,<retiré>'],
+    ['nodeDone','data:image/…;base64,<retiré>'],
+    ['nodeLock','data:image/…;base64,<retiré>'],
+    ['nodePlay','data:image/…;base64,<retiré>'],
+    ['uiMap','data:image/…;base64,<retiré>'],
+    ['uiQuests','data:image/…;base64,<retiré>'],
+    ['uiRules','data:image/…;base64,<retiré>'],
+    ['uiArena','data:image/…;base64,<retiré>'],
+    ['uiShop','data:image/…;base64,<retiré>'],
+    ['uiSon','data:image/…;base64,<retiré>'],
+    ['uiMusique','data:image/…;base64,<retiré>'],
+    ['uiVictoire','data:image/…;base64,<retiré>'],
+    ['enemyBouclier','data:image/…;base64,<retiré>'],
+    ['enemyTeleport','data:image/…;base64,<retiré>'],
+    ['ammoPerf','data:image/…;base64,<retiré>'],
+    ['ammoScatter','data:image/…;base64,<retiré>'],
+    ['ammoHoming','data:image/…;base64,<retiré>'],
+    ['icoScore','data:image/…;base64,<retiré>'],
+    ['icoWarning','data:image/…;base64,<retiré>'],
+    ['enemyChasseur','data:image/…;base64,<retiré>'],
+    ['enemyTireur','data:image/…;base64,<retiré>'],
+    ['enemyTank','data:image/…;base64,<retiré>'],
     
 ];
 /* Decor optionnel : charge depuis assets/ si present, sinon ignore sans casse */
@@ -299,38 +299,38 @@ const FONDS_NIVEAU = {
   21:{nom:'Nexus Prime',   chaos:103}
 };
 const DECORS_INLINE = {
-  1:'data:image/jpeg;base64,/*[IMAGE 17 Ko retiree pour l'audit]*/',
-  2:'data:image/jpeg;base64,/*[IMAGE 42 Ko retiree pour l'audit]*/',
-  3:'data:image/jpeg;base64,/*[IMAGE 32 Ko retiree pour l'audit]*/',
-  4:'data:image/jpeg;base64,/*[IMAGE 66 Ko retiree pour l'audit]*/',
-  5:'data:image/jpeg;base64,/*[IMAGE 43 Ko retiree pour l'audit]*/',
-  6:'data:image/jpeg;base64,/*[IMAGE 56 Ko retiree pour l'audit]*/',
-  7:'data:image/jpeg;base64,/*[IMAGE 19 Ko retiree pour l'audit]*/',
-  8:'data:image/jpeg;base64,/*[IMAGE 27 Ko retiree pour l'audit]*/',
-  9:'data:image/jpeg;base64,/*[IMAGE 59 Ko retiree pour l'audit]*/',
-  10:'data:image/jpeg;base64,/*[IMAGE 60 Ko retiree pour l'audit]*/',
-  11:'data:image/jpeg;base64,/*[IMAGE 17 Ko retiree pour l'audit]*/',
-  12:'data:image/jpeg;base64,/*[IMAGE 81 Ko retiree pour l'audit]*/'
+  1:'data:image/…;base64,<retiré>',
+  2:'data:image/…;base64,<retiré>',
+  3:'data:image/…;base64,<retiré>',
+  4:'data:image/…;base64,<retiré>',
+  5:'data:image/…;base64,<retiré>',
+  6:'data:image/…;base64,<retiré>',
+  7:'data:image/…;base64,<retiré>',
+  8:'data:image/…;base64,<retiré>',
+  9:'data:image/…;base64,<retiré>',
+  10:'data:image/…;base64,<retiré>',
+  11:'data:image/…;base64,<retiré>',
+  12:'data:image/…;base64,<retiré>'
 };
 const DECORS_CHAOS = {
-  101:'data:image/jpeg;base64,/*[IMAGE 41 Ko retiree pour l'audit]*/',
-  102:'data:image/jpeg;base64,/*[IMAGE 27 Ko retiree pour l'audit]*/',
-  103:'data:image/jpeg;base64,/*[IMAGE 36 Ko retiree pour l'audit]*/',
-  104:'data:image/jpeg;base64,/*[IMAGE 29 Ko retiree pour l'audit]*/'
+  101:'data:image/…;base64,<retiré>',
+  102:'data:image/…;base64,<retiré>',
+  103:'data:image/…;base64,<retiré>',
+  104:'data:image/…;base64,<retiré>'
 };
 const DECORS_EXTREME = {
-  1:'data:image/jpeg;base64,/*[IMAGE 16 Ko retiree pour l'audit]*/',
-  2:'data:image/jpeg;base64,/*[IMAGE 37 Ko retiree pour l'audit]*/',
-  3:'data:image/jpeg;base64,/*[IMAGE 59 Ko retiree pour l'audit]*/',
-  4:'data:image/jpeg;base64,/*[IMAGE 60 Ko retiree pour l'audit]*/',
-  5:'data:image/jpeg;base64,/*[IMAGE 42 Ko retiree pour l'audit]*/',
-  6:'data:image/jpeg;base64,/*[IMAGE 45 Ko retiree pour l'audit]*/',
-  7:'data:image/jpeg;base64,/*[IMAGE 39 Ko retiree pour l'audit]*/',
-  8:'data:image/jpeg;base64,/*[IMAGE 45 Ko retiree pour l'audit]*/',
-  9:'data:image/jpeg;base64,/*[IMAGE 27 Ko retiree pour l'audit]*/',
-  10:'data:image/jpeg;base64,/*[IMAGE 64 Ko retiree pour l'audit]*/',
-  11:'data:image/jpeg;base64,/*[IMAGE 67 Ko retiree pour l'audit]*/',
-  12:'data:image/jpeg;base64,/*[IMAGE 53 Ko retiree pour l'audit]*/'
+  1:'data:image/…;base64,<retiré>',
+  2:'data:image/…;base64,<retiré>',
+  3:'data:image/…;base64,<retiré>',
+  4:'data:image/…;base64,<retiré>',
+  5:'data:image/…;base64,<retiré>',
+  6:'data:image/…;base64,<retiré>',
+  7:'data:image/…;base64,<retiré>',
+  8:'data:image/…;base64,<retiré>',
+  9:'data:image/…;base64,<retiré>',
+  10:'data:image/…;base64,<retiré>',
+  11:'data:image/…;base64,<retiré>',
+  12:'data:image/…;base64,<retiré>'
 };
 /* Un fond par campagne. Plus de variantes : GENESIS garde la carte
    d'origine (double helice vert et violet), CHAOS PROTOCOL prend la
@@ -505,14 +505,14 @@ function formeFallback(ctx,forme,r,couleur){
   ctx.closePath(); ctx.fill(); ctx.restore();
 }
 const NODE_IMGS = {
-  1: 'data:image/png;base64,/*[IMAGE 16 Ko retiree pour l'audit]*/',
-  2: 'data:image/png;base64,/*[IMAGE 26 Ko retiree pour l'audit]*/',
-  3: 'data:image/png;base64,/*[IMAGE 63 Ko retiree pour l'audit]*/',
-  4: 'data:image/png;base64,/*[IMAGE 29 Ko retiree pour l'audit]*/',
-  5: 'data:image/png;base64,/*[IMAGE 90 Ko retiree pour l'audit]*/',
-  6: 'data:image/png;base64,/*[IMAGE 67 Ko retiree pour l'audit]*/',
-  7: 'data:image/png;base64,/*[IMAGE 97 Ko retiree pour l'audit]*/',
-  8: 'data:image/png;base64,/*[IMAGE 78 Ko retiree pour l'audit]*/'
+  1: 'data:image/…;base64,<retiré>',
+  2: 'data:image/…;base64,<retiré>',
+  3: 'data:image/…;base64,<retiré>',
+  4: 'data:image/…;base64,<retiré>',
+  5: 'data:image/…;base64,<retiré>',
+  6: 'data:image/…;base64,<retiré>',
+  7: 'data:image/…;base64,<retiré>',
+  8: 'data:image/…;base64,<retiré>'
 };
 
 
@@ -574,7 +574,7 @@ const TIRS = [
 const MUNITIONS = [
   {id:'std', name:'Standard', desc:'Équilibré', dmg:1, rate:1, spread:0},
   {id:'perf', name:'Perforantes', desc:'Hauts dégâts', dmg:1.55, rate:0.7, spread:0},
-  {id:'spread', name:'Spread', desc:'Tir large', dmg:0.85, rate:0.9, spread:2},
+  {id:'spread', name:'Spread', desc:'Tir large', dmg:0.92, rate:0.88, spread:2},
   {id:'hyper', name:'Hyper Rapid', desc:'Cadence extrême', dmg:0.65, rate:1.7, spread:0},
 ];
 const MODES = [
@@ -719,9 +719,9 @@ function afficherTransmission(de, texte, apres, couleur){
   ov.innerHTML='<div style="max-width:340px;width:100%">'+
     portrait+
     '<div style="font-family:Orbitron,sans-serif;font-size:10px;letter-spacing:3px;color:'+(couleur||'#14F195')+';margin-bottom:10px">'+
-    '\u25b8 TRANSMISSION \u2014 '+de+'</div>'+
+    '\u25b8 '+T('TRANSMISSION')+' \u2014 '+de+'</div>'+
     '<div id="tr-txt" style="font-size:13px;line-height:1.75;color:#d6d3e0;white-space:pre-line;min-height:96px"></div>'+
-    '<div style="margin-top:18px;font-size:10px;color:#6b7280;letter-spacing:2px">APPUYER POUR CONTINUER</div></div>';
+    '<div style="margin-top:18px;font-size:10px;color:#6b7280;letter-spacing:2px">'+T('APPUYER POUR CONTINUER')+'</div></div>';
   document.body.appendChild(ov);
   const cible=document.getElementById('tr-txt');
   let i=0;
@@ -747,6 +747,7 @@ const BOUCLES = {
 
 let S = {
   connected:false, address:'',
+  rpcPerso:'',                  /* endpoint devnet choisi par le joueur (voir renderRpc) */
   sol:0, skr:900, soldeSkr:0,   /* sol/soldeSkr = soldes du wallet, jamais donnes par le jeu */
   weapon:1, fireRate:1.0, maxLives:3,
   ship:0, unlocked:[0,1],
@@ -816,6 +817,10 @@ function load(){
   nombres.forEach(k=>{ const v=Number(S[k]); S[k]=Number.isFinite(v)?v:(Number(defauts[k])||0); });
   ['skr','sol','streak','txCount','txOnChain','txTotal','donsSol','donsSkr','totalKills'].forEach(k=>{ if(S[k]<0) S[k]=0; });
   delete S.txSimu;                    /* vestige du mode simulation, supprime */
+  /* Endpoint personnel : une save trafiquee ne doit pas injecter n'importe
+     quoi dans le pool. On n'accepte qu'une URL https. */
+  if(typeof S.rpcPerso!=='string' || !/^https:\/\/[^\s]+$/i.test(S.rpcPerso)) S.rpcPerso='';
+  reconstruirePool();
   ['mitra','nuke','ghost'].forEach(k=>{ const v=Number(S.charges[k]); S.charges[k]=Number.isFinite(v)&&v>0?Math.floor(v):0; });
 
   /* Compat anciennes saves : les prefs absentes reprennent la valeur par defaut */
@@ -824,6 +829,27 @@ function load(){
   if(S.prefs.volMusique!==undefined) Audio2.volMusique=S.prefs.volMusique;
   if(S.prefs.volSfx!==undefined)     Audio2.volSfx=S.prefs.volSfx;
   if(S.ghostUnlocked&&!S.unlocked.includes(5)) S.unlocked.push(5);
+  /* Reparation des sauvegardes ecrites avant le correctif : la demo y avait
+     laisse des vaisseaux jamais achetes. On ne garde que ce qui est
+     legitimement acquis — offert au depart, paye, ou merite. */
+  if(!S.demoNettoyee){
+    S.demoNettoyee=true;
+    const legitimes = SHIPS.filter(sh=>{
+      if(!sh.sol && !sh.skr && !sh.cond) return true;         /* offerts */
+      if(sh.cond) return true;                                 /* verifies plus bas */
+      return false;
+    }).map(sh=>sh.id);
+    const avant=(S.unlocked||[]).length;
+    S.unlocked=(S.unlocked||[]).filter(id=>{
+      if(legitimes.includes(id)) return true;
+      const sh=SHIPS.find(x=>x.id===id);
+      if(!sh) return false;
+      /* Un vaisseau payant n'est garde que si une transaction l'atteste. */
+      return (S.signatures||[]).some(x=>String(x.action)==='ship:'+id);
+    });
+    if(!S.unlocked.includes(0)) S.unlocked.unshift(0);
+    if(S.unlocked.length<avant) LOG.log('[SEEKER] sauvegarde nettoyee : '+(avant-S.unlocked.length)+' vaisseau(x) laisse(s) par la demo');
+  }
 
   /* Le vaisseau de depart est toujours disponible, et on ne pilote que
      ce qu'on possede : sans ca, une save modifiee donne acces a tout. */
@@ -839,7 +865,13 @@ function load(){
   checkStreak(); ui(); renderSettings(); poserFinsDePage(); demarrer(); armerVeille();
   traduirePage();
 }
-function save(){ localStorage.setItem('ss_v35', JSON.stringify(S)); }
+function save(){
+  /* La demo debloque des vaisseaux et parcourt des secteurs avances pour
+     sa vitrine. Rien de tout cela ne doit atteindre le disque : on bloque
+     l'ecriture a la source plutot que de nettoyer apres coup. */
+  if(typeof _demoActive!=='undefined' && _demoActive) return;
+  localStorage.setItem('ss_v35', JSON.stringify(S));
+}
 
 function beep(f=440,d=0.08,t='square',v=0.07){ if(!S.prefs||!S.prefs.son) return; try{ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type=t;o.frequency.value=f;g.gain.value=v; o.connect(g);g.connect(audioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d); o.stop(audioCtx.currentTime+d); }catch(e){} }
 const SFX_FICHIER={shot:'shoot',hit:null,kill:'enemy_die',power:'pickup',hurt:'hit',nuke:'boss_die'};
@@ -911,6 +943,7 @@ function majBoutonsLangue(){
   });
 }
 function renderSettings(){
+  renderRpc();
   renderPanneauDev();
   renderPanneauPaliers();
   renderJournalTx();
@@ -1146,6 +1179,11 @@ const PISTES_MUSIQUE = {
 const PISTES_SFX = { shoot:'shoot', enemy_shoot:'enemy_shoot', hit:'hit', enemy_die:'enemy_die',
   boss_die:'boss_die', pickup:'pickup', levelup:'levelup', button_click:'button_click',
   wave_start:'wave_start', victory:'victory', defeat:'defeat' };
+/* Effets sonores livres sous forme de fichier. Aucun a ce jour : ils sont
+   tous produits par la synthese WebAudio. Les demander au serveur ne servait
+   qu'a remplir la console de 404 avant de retomber sur la synthese.
+   Pour en activer un, depose assets/audio/<nom>.mp3 et ajoute son nom ici. */
+const SFX_FICHIERS = [];
 
 /* Musiques embarquees (version legere 32 kbps). Si assets/audio/<nom>.mp3
    existe, la version haute qualite est utilisee a la place. */
@@ -1310,6 +1348,8 @@ const Audio2 = {
        Android : on le tente d'abord, et l'embarque prend le relais si le
        fichier manque (build autonome, ouverture en file://). */
     const embarque = MUSIQUES_INLINE[nom];
+    /* Rien a telecharger si la piste est deja en memoire : on evite le 404. */
+    if(embarque){ this.dispo[nom]=true; this.cache[nom]=a; return a; }
     a.addEventListener('error', ()=>{
       this.dispo[nom]=false;
       /* Les effets sonores n'ont pas de version embarquee : ils basculent
@@ -1331,8 +1371,8 @@ const Audio2 = {
   jouerSfx(cle){
     if(!this.sonAutorise()) return false;
     const nom=PISTES_SFX[cle]; if(!nom) return false;
-    /* 1) fichier MP3 s'il est disponible */
-    if(this.dispo[nom]!==false){
+    /* 1) fichier MP3, uniquement s'il est reellement livre */
+    if(SFX_FICHIERS.indexOf(nom)>=0 && this.dispo[nom]!==false){
       try{
         const src=this.charger(nom);
         const inst=src.cloneNode();
@@ -1348,17 +1388,20 @@ const Audio2 = {
   /* Musique : une seule piste a la fois, en boucle, fondu court */
   jouerMusique(cle){
     if(!this.musiqueAutorisee()) return this.stopMusique();
+    /* Les navigateurs refusent tout son avant un geste de l'utilisateur.
+       Insister remplissait la console de refus a chaque changement de piste. */
+    if(!_gesteFait){ this.pisteEnAttente=cle; return; }
     const nom=PISTES_MUSIQUE[cle]; if(!nom) return;
     if(this.pisteActuelle===cle && (this.sourceWA || (this.musiqueEnCours && !this.musiqueEnCours.paused))) return;
     this.stopMusique();
     this.pisteActuelle=cle;
     LOG.log('[SEEKER] musique : '+cle);
 
-    /* Sans fichier accessible (ouverture locale), on va directement au
-       decodage memoire : inutile de faire echouer l'element audio d'abord. */
-    if(this.dispo[nom]===false && MUSIQUES_INLINE[nom]){
-      this.jouerEmbarquee(nom); return;
-    }
+    /* Piste embarquee dans le build : on la joue directement en memoire.
+       Avant, on tentait d'abord le fichier externe — qui n'existe pas dans
+       le build autonome : chaque musique produisait un 404 dans la console
+       et un aller-retour reseau inutile avant de basculer. */
+    if(MUSIQUES_INLINE[nom]){ this.jouerEmbarquee(nom); return; }
     try{
       const a=this.charger(nom);
       a.loop=true; a.volume=0; a.currentTime=0;
@@ -1398,6 +1441,10 @@ const MOTIFS = {
 };
 function haptique(type){
   if(S.prefs && S.prefs.vibration===false) return;
+  /* Le navigateur bloque la vibration tant que la page n'a pas ete touchee,
+     et journalise un avertissement a chaque tentative. La demo, qui tourne
+     avant tout geste, en produisait des dizaines. */
+  if(typeof _gesteFait!=='undefined' && !_gesteFait) return;
   const m=MOTIFS[type]||[20];
   if(navigator.vibrate) navigator.vibrate(m);
 }
@@ -1434,6 +1481,17 @@ function choisirLangueDepart(l){
 function apresChoixLangue(){
   if(!localStorage.getItem('ss_tuto_vu')) ouvrirTuto(); else show('home');
 }
+
+/* Vrai des le premier geste du joueur. Avant cela, le navigateur refuse
+   tout demarrage audio : inutile d'essayer. */
+let _gesteFait=false;
+['pointerdown','touchstart','keydown','mousedown'].forEach(ev=>
+  document.addEventListener(ev, ()=>{
+    if(_gesteFait) return;
+    _gesteFait=true;
+    /* On rejoue la piste qui attendait. */
+    try{ if(Audio2.pisteEnAttente){ const p=Audio2.pisteEnAttente; Audio2.pisteEnAttente=null; Audio2.jouerMusique(p); } }catch(e){}
+  }, {passive:true}));
 
 let _splashParti=false, _minuteurDemo=null;
 function quitterSplash(){
@@ -1483,7 +1541,7 @@ function fermerTuto(){
   /* Intro narrative au tout premier lancement */
   if(!S.loreVu){
     S.loreVu=true; save();
-    afficherTransmission('ARCHIVES GENESIS', LORE_INTRO.join('\n'), ()=>show('home'), '#c4b5fd');
+    afficherTransmission(T('ARCHIVES GENESIS'), T(LORE_INTRO.join('\n')), ()=>show('home'), '#c4b5fd');
   } else show('home');
 }
 
@@ -1822,20 +1880,22 @@ function setParticulesPause(v){ setParticules(v); majTogglesPause(); }
    deux campagnes, quatre boss, six vaisseaux differents.
    Duree totale : 2 min 15 environ, puis ca reboucle.
    ============================================================ */
+/* mun : chaque tableau montre aussi une munition differente — sans ca, les
+   sept sequences se ressemblaient malgre les sept vaisseaux. */
 const DEMO_SEQ = [
-  {node:2,  diff:'normal',    ship:0,  duree:15000, nom:'GENESIS • CHAMP D’ASTÉROÏDES',
+  {node:2,  diff:'normal',    ship:0,  mun:'std',    duree:15000, nom:'GENESIS • CHAMP D’ASTÉROÏDES',
    accroche:'Esquive, tir continu, tout se joue au placement'},
-  {node:4,  diff:'difficile', ship:2,  duree:22000, nom:'VORTEX • PREMIER BOSS',
+  {node:4,  diff:'difficile', ship:2,  mun:'perf',   duree:22000, nom:'VORTEX • PREMIER BOSS',
    accroche:'Spirale de disques • PV ×5 • 2 phases'},
-  {node:9,  diff:'difficile', ship:5,  duree:15000, nom:'DÉBRIS OUBLIÉS • GRAVITÉ ZÉRO',
+  {node:9,  diff:'difficile', ship:5,  mun:'hyper',  duree:15000, nom:'DÉBRIS OUBLIÉS • GRAVITÉ ZÉRO',
    accroche:'Secteur secret • l’inertie devient l’ennemie'},
-  {node:12, diff:'difficile', ship:4,  duree:24000, nom:'NEXUS • BOSS FINAL GENESIS',
+  {node:12, diff:'difficile', ship:4,  mun:'spread', duree:24000, nom:'NEXUS • BOSS FINAL GENESIS',
    accroche:'PV ×16 • 3 phases • change de forme'},
-  {node:15, diff:'difficile', ship:7,  duree:15000, nom:'CHAOS PROTOCOL • MEUTE D’ÉLITE',
+  {node:15, diff:'difficile', ship:7,  mun:'hyper',  duree:15000, nom:'CHAOS PROTOCOL • MEUTE D’ÉLITE',
    accroche:'Seconde campagne • bestiaire entièrement différent'},
-  {node:16, diff:'extreme',   ship:10, duree:22000, nom:'FRACTURE • ANOMALIE',
+  {node:16, diff:'extreme',   ship:10, mun:'perf',   duree:22000, nom:'FRACTURE • ANOMALIE',
    accroche:'PV ×17 • 3 formes • difficulté Extrême'},
-  {node:21, diff:'extreme',   ship:11, duree:26000, nom:'NEXUS PRIME • BOSS ULTIME',
+  {node:21, diff:'extreme',   ship:11, mun:'spread', duree:26000, nom:'NEXUS PRIME • BOSS ULTIME',
    accroche:'PV ×26 • 5 mutations successives'}
 ];
 let _demoActive=false, _demoIdx=0, _demoTimer=null, _demoSnap=null, _demoVus=0;
@@ -1855,9 +1915,9 @@ function lancerDemo(){
     'background:rgba(0,0,0,.68);padding:8px 16px;border-radius:13px;max-width:92vw;'+
     'border:1px solid rgba(20,241,149,.32);backdrop-filter:blur(6px)';
   document.body.appendChild(badge);
-  document.addEventListener('touchstart',arreterDemo,{once:true});
-  document.addEventListener('mousedown',arreterDemo,{once:true});
-  document.addEventListener('keydown',arreterDemo,{once:true});
+  /* Tout geste rend la main immediatement, quel qu'il soit. */
+  ['touchstart','mousedown','keydown','wheel','pointerdown'].forEach(ev=>
+    document.addEventListener(ev, arreterDemo, {once:true, passive:true}));
   demoSequence();
 }
 
@@ -1880,6 +1940,8 @@ function demoSequence(){
     if(!S.unlocked.includes(sq.ship)) S.unlocked=S.unlocked.concat(sq.ship);
     S.ship=sq.ship; loadout.ship=sq.ship;
   }
+  /* Munition de la sequence, avec repli si l'identifiant est inconnu. */
+  loadout.munition = (sq.mun && MUNITIONS.some(m=>m.id===sq.mun)) ? sq.mun : 'std';
 
   const badge=document.getElementById('badge-demo');
   if(badge){
@@ -1889,6 +1951,7 @@ function demoSequence(){
       'color:#9ca3af;margin-top:3px">'+sq.accroche+'</i>'+
       '<i style="display:block;font-style:normal;font-size:8px;letter-spacing:1.2px;'+
       'color:#6b7280;margin-top:2px">'+(v?v.name.toUpperCase():'')+
+      ' • '+((MUNITIONS.find(m=>m.id===loadout.munition)||MUNITIONS[0]).name.toUpperCase())+
       ' • '+((_demoIdx%DEMO_SEQ.length)+1)+'/'+DEMO_SEQ.length+'</i>';
   }
 
@@ -1925,9 +1988,15 @@ function arreterDemo(){
     S.secrets=(S.secrets||[]).concat(id);
     S.skr+=sc.gc;
   });
+  /* On rend la main a l'accueil. Remettre le splash par-dessus tout donnait
+     l'impression d'une application figee : plus rien ne defilait et il
+     fallait deviner qu'un appui supplementaire etait attendu. */
   const el=document.getElementById('splash');
-  if(el){ el.classList.remove('parti'); el.style.display='flex'; }
-  _splashParti=false;
+  if(el){ el.classList.add('parti'); el.style.display='none'; }
+  _splashParti=true;
+  show('home');
+  /* _demoActive est deja retombe a false : ce save ecrit bien l'etat restaure. */
+  save();
   ui(); armerDemo(); armerVeille();
 }
 

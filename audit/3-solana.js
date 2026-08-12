@@ -1,10 +1,10 @@
 /* ============================================================
-   SEEKER STRIKE v4.2 - 3-solana.js
-   Integration Solana
-   Lignes 2040 a 3029 du script d'origine (game/index_v37.html)
-   Images base64 retirees : elles ne concernent pas l'audit.
+   SEEKER STRIKE v4.4 - 3-solana.js
+   Integration Solana : wallet, signatures, RPC, paliers
+   Lignes 2109 a 3400 du script (game/index_v37.html)
+   Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
+   La source de verite est game/index_v37.html.
    ============================================================ */
-
    SEEKER TASK — vraies transactions on-chain (devnet)
    Chaque action de jeu marquante envoie une transaction signee
    par le joueur : c'est ce qui construit son activite Solana.
@@ -25,6 +25,12 @@ const SKR = {
   mod: null, actif: true
 };
 function mintSKR(){ return (CHAINE.rpc.indexOf('devnet')>=0 && SKR.mintTest) ? SKR.mintTest : SKR.mint; }
+/* Le mint SKR officiel vit sur mainnet. Sur devnet, sans mint de test
+   renseigne, aucun paiement SKR ne peut aboutir : on l'annonce au lieu de
+   laisser le RPC repondre « could not find mint ». */
+function skrIndisponible(){
+  return CHAINE.rpc.indexOf('devnet')>=0 && !SKR.mintTest;
+}
 
 /* Dons : totalement facultatifs, jamais reclames par le jeu. L'adresse est
    affichee en clair et copiable pour qu'on puisse aussi donner depuis
@@ -41,8 +47,33 @@ const TRESORERIE = {
   frais:   0.001,        /* SOL preleves une fois pour les 15 memos */
   actif:   true
 };
+/* Le RPC public de Solana limite chaque IP a une centaine d'appels par
+   tranche de 10 s — et depuis une IP mobile partagee, le quota est deja
+   consomme par d'autres : on recoit un 429 des le premier appel.
+   D'ou un pool, une rotation, et surtout la possibilite pour le joueur de
+   coller SON endpoint dans les reglages (Helius, QuickNode, Alchemy...).
+   Un endpoint personnel passe en tete et regle le probleme definitivement. */
+/* Clef Helius du projet, assemblee a l'execution.
+   Ce n'est PAS de la securite : n'importe qui peut lire la valeur dans la
+   console. C'est uniquement pour echapper aux robots qui scannent les pages
+   et les depots publics a la recherche du motif d'un UUID — ce sont eux qui
+   brulent les quotas, pas des attaquants motives.
+   Le plan gratuit Helius ne permet pas de restreindre par domaine ; le vrai
+   filet, c'est la bascule automatique : si la clef est epuisee (429) ou
+   revoquee (401), l'endpoint est ecarte et le jeu continue sur les publics. */
+const _clefHelius = ['fc3853b9','07dd','4f31','9ba3','af7d0ddf8ecc'].join('-');
+const RPC_DEVNET_DEFAUT = [
+  'https://devnet.helius-rpc.com/?api-key='+_clefHelius,
+  'https://api.devnet.solana.com',     /* officiel : sature en permanence */
+  'https://solana-devnet.g.alchemy.com/v2/demo',   /* clef de demo, souvent 401 */
+  'https://solana-devnet.api.onfinality.io/public' /* public sans clef */
+];
+let RPC_DEVNET = RPC_DEVNET_DEFAUT.slice();
+/* Endpoints qui ont repondu n'importe quoi : on ne les rappelle plus de la
+   session. Sans ca, la rotation revenait indefiniment sur un RPC mort. */
+let RPC_MORTS = {};
 const CHAINE = {
-  rpc:'https://api.devnet.solana.com',
+  rpc:RPC_DEVNET[0], rpcIndex:0,
   web3:'https://esm.sh/@solana/web3.js@1',
   memoProgram:'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
   mod:null, connexion:null, enCours:false
@@ -57,13 +88,161 @@ async function chargerWeb3(){
   }catch(e){ LOG.warn('[SEEKER] web3.js indisponible : '+(e&&e.message)); return null; }
 }
 
+/* Remet le pool a plat : l'endpoint du joueur d'abord, puis les publics. */
+function reconstruirePool(){
+  const perso = String((S && S.rpcPerso) || '').trim();
+  RPC_DEVNET = perso ? [perso].concat(RPC_DEVNET_DEFAUT) : RPC_DEVNET_DEFAUT.slice();
+  RPC_MORTS = {};
+  CHAINE.rpcIndex = 0;
+  CHAINE.rpc = RPC_DEVNET[0];
+  invaliderBlockhash();
+  if(CHAINE.mod){ try{ CHAINE.connexion = new CHAINE.mod.Connection(CHAINE.rpc,'confirmed'); }catch(e){} }
+  return CHAINE.rpc;
+}
+/* Reconnaissance d'une saturation du RPC : 429, « rate limit », « too many ». */
+function estSature(e){
+  const m=String((e&&(e.message||e))||'').toLowerCase();
+  return m.indexOf('429')>=0 || m.indexOf('rate limit')>=0 || m.indexOf('too many')>=0;
+}
+/* Un RPC peut aussi etre casse sans etre sature : passe derriere un paywall,
+   il renvoie une reponse que web3.js n'arrive pas a lire
+   (« Expected the value to satisfy a union of type|type »), ou un 401/403.
+   Dans tous ces cas la bonne reaction est la meme : changer d'endpoint,
+   surtout pas declarer la transaction perdue. */
+function estRpcCasse(e){
+  if(estSature(e)) return true;
+  const m=String((e&&(e.message||e))||'').toLowerCase();
+  return m.indexOf('union of')>=0
+      || m.indexOf('expected the value to satisfy')>=0
+      || m.indexOf('failed to fetch')>=0
+      || m.indexOf('networkerror')>=0
+      || m.indexOf('load failed')>=0
+      || m.indexOf('unauthorized')>=0
+      || m.indexOf('forbidden')>=0
+      || m.indexOf('timeout')>=0
+      || /\b(401|403|500|502|503|504)\b/.test(m);
+}
+/* Marque l'endpoint courant comme inutilisable pour le reste de la session. */
+function marquerRpcMort(raison){
+  RPC_MORTS[CHAINE.rpc]=true;
+  LOG.warn('[SEEKER] RPC ecarte : '+CHAINE.rpc+' ('+String(raison||'').slice(0,60)+')');
+}
+/* Vrai si plus aucun endpoint du pool n'est utilisable. */
+function poolEpuise(){ return RPC_DEVNET.every(u=>RPC_MORTS[u]); }
+/* Passe au RPC suivant encore vivant et reconstruit la connexion.
+   Retourne false si le pool est epuise : l'appelant doit alors abandonner
+   proprement plutot que de tourner en rond. */
+function rpcSuivant(){
+  if(!CHAINE.mod) return false;
+  if(poolEpuise()) return false;
+  for(let n=0; n<RPC_DEVNET.length; n++){
+    CHAINE.rpcIndex = (CHAINE.rpcIndex+1) % RPC_DEVNET.length;
+    const url = RPC_DEVNET[CHAINE.rpcIndex];
+    if(RPC_MORTS[url]) continue;
+    CHAINE.rpc = url;
+    try{ CHAINE.connexion = new CHAINE.mod.Connection(CHAINE.rpc, 'confirmed'); }catch(e){ continue; }
+    LOG.warn('[SEEKER] bascule sur '+CHAINE.rpc);
+    return true;
+  }
+  return false;
+}
+const pause = ms => new Promise(r=>setTimeout(r,ms));
+
+/* Marqueur unique pour differencier deux transactions par ailleurs
+   identiques. L'horloge seule ne suffit pas : deux appels dans la meme
+   milliseconde rendaient la meme valeur, donc la meme signature. */
+let _seqMemo = 0;
+function marqueurUnique(){
+  return Date.now().toString(36) + '-' + ((_seqMemo++) % 46656).toString(36);
+}
+
+/* Un blockhash reste valide environ une minute (150 blocs). Le redemander a
+   chaque envoi etait la source principale des 429 : on le garde en memoire.
+   La fenetre est nommee pour que les tests ne codent pas le nombre en dur. */
+const BH_FENETRE = 40000;
+CHAINE.bhCache=null; CHAINE.bhTemps=0;
+/* A appeler des qu'une transaction echoue sur un blockhash perime : sans ca,
+   le cache reservait la meme valeur morte pendant 40 s et TOUTES les relances
+   echouaient d'affilee. */
+function invaliderBlockhash(){ CHAINE.bhCache=null; CHAINE.bhTemps=0; }
+async function blockhashFrais(){
+  const now=Date.now();
+  if(CHAINE.bhCache && now-CHAINE.bhTemps < BH_FENETRE) return CHAINE.bhCache;
+  let derniere=null;
+  /* Au moins un essai par endpoint, plus une reprise sur le premier. */
+  const essais = Math.max(4, RPC_DEVNET.length+2);
+  for(let essai=0; essai<essais; essai++){
+    try{
+      const r = await CHAINE.connexion.getLatestBlockhash();
+      CHAINE.bhCache = r.blockhash; CHAINE.bhTemps = Date.now();
+      return CHAINE.bhCache;
+    }catch(e){
+      derniere=e;
+      if(!estRpcCasse(e)) throw e;
+      /* Sature = passager, on y reviendra. Casse = on l'ecarte pour de bon. */
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      if(!rpcSuivant()) throw new Error('AUCUN_RPC');
+      await pause(estSature(e) ? 800*(essai+1) : 150);
+    }
+  }
+  throw derniere || new Error('AUCUN_RPC');
+}
+/* Diffusion avec reprise : meme logique que pour le blockhash. */
+async function diffuser(brut){
+  let derniere=null;
+  const essais = Math.max(4, RPC_DEVNET.length+2);
+  for(let essai=0; essai<essais; essai++){
+    try{ return await CHAINE.connexion.sendRawTransaction(brut); }
+    catch(e){
+      derniere=e;
+      if(!estRpcCasse(e)) throw e;
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      if(!rpcSuivant()) throw new Error('AUCUN_RPC');
+      await pause(estSature(e) ? 800*(essai+1) : 150);
+    }
+  }
+  throw derniere || new Error('AUCUN_RPC');
+}
+/* Traduit une erreur technique en une phrase comprehensible. */
+function causeLisible(e){
+  /* Un rejet peut arriver en objet sans message : String() rendait alors
+     « [object Object] », affiche tel quel au joueur. On le neutralise. */
+  let brut=String((e&&(e.message||e))||'');
+  if(brut==='[object Object]'){
+    try{ brut=JSON.stringify(e)||''; }catch(x){ brut=''; }
+    if(brut==='{}') brut='';
+  }
+  /* Plus aucun endpoint utilisable : on dit quoi faire, pas juste que ca rate. */
+  if(brut==='AUCUN_RPC' || poolEpuise()) return 'réseau devnet indisponible, réessaie dans 1 minute';
+  if(/union of|expected the value to satisfy/i.test(brut)) return 'serveur RPC indisponible, bascule automatique';
+  if(/\b(401|403)\b|unauthorized|forbidden/i.test(brut)) return 'RPC refuse l\'accès (clé requise) · bascule automatique';
+  if(estSature(e)) return 'reseau devnet saturé, patiente quelques secondes';
+  if(/blockhash not found|block height exceeded/i.test(brut)) return 'transaction expirée, relance-la';
+  if(/insufficient|0x1\b/i.test(brut)) return 'solde SOL devnet insuffisant';
+  /* Le wallet n'a jamais repondu : ce n'est pas un refus, on invite a reessayer. */
+  if(/^timeout:/.test(brut)) return 'le wallet n\'a pas répondu, réessaie';
+  /* Solflare dit « Transaction rejected », Backpack renvoie le code 4001 :
+     ni l'un ni l'autre n'etait reconnu, le joueur voyait l'anglais brut. */
+  if(/reject|refus|declined|denied|cancell?ed|\b4001\b/i.test(brut)) return 'signature refusée dans le wallet';
+  /* Deux fois la meme transaction dans la fenetre du blockhash. */
+  if(/already been processed|duplicate/i.test(brut)) return 'transaction déjà envoyée, patiente un instant';
+  /* Un rejet en objet vide donnait une chaine vide, donc le « erreur inconnue »
+     generique que l'on voulait justement supprimer. */
+  return brut.slice(0,70) || 'le wallet a refusé sans préciser la raison';
+}
+
 /* Retrouve le provider d'extension apres un rechargement de page.
    Phantom et Backpack acceptent une reconnexion sans interaction quand le
    site a deja ete autorise (onlyIfTrusted). */
 async function retrouverProvider(){
   if(_providerExt) return _providerExt;
   if(!S.walletReel || S.walletType==='mwa') return null;
-  const p = getProvider(S.walletId) || getProvider('phantom') || window.solana;
+  /* Sans filtre, un joueur Solflare dont l'extension tarde a s'injecter se
+     voyait servir Phantom, et le bloc « compte actif » plus bas ecrasait son
+     adresse par celle d'un AUTRE wallet, sans un mot. On ne cherche ailleurs
+     que si aucun wallet n'a ete choisi. */
+  const p = S.walletId ? getProvider(S.walletId)
+          : (getProvider('phantom') || getProvider('solflare') || window.solana);
   if(!p) return null;
   try{
     if(!p.publicKey && typeof p.connect==='function'){
@@ -77,10 +256,12 @@ async function retrouverProvider(){
     if(!adr) return null;
     /* Le wallet a pu changer de compte entre-temps : on suit le compte actif. */
     if(adr!==S.addressComplete){
+      /* On ne suit que le changement de compte DANS le wallet choisi : la
+         trace dit lequel, pour qu'un ecrasement se voie dans le journal. */
+      dbg('compte actif change dans '+(S.walletId||'solana')+', adresse mise a jour');
       S.addressComplete=adr;
       S.address=adr.slice(0,4)+'\u2026'+adr.slice(-4);
       save(); ui();
-      dbg('compte actif different, adresse mise a jour');
     }
     _providerExt=p;
     dbg('provider retrouve : '+(S.walletId||'solana'));
@@ -91,26 +272,40 @@ async function retrouverProvider(){
 /* Signe une transaction et la diffuse sur le devnet.
    Trois canaux possibles selon la facon dont le joueur s'est connecte :
    sans ce choix, la demande de signature partait dans le vide. */
+/* Aucun wallet ne garantit de repondre. Fenetre fermee par le systeme,
+   application wallet tuee en arriere-plan, WebView suspendue : la promesse
+   ne se resout NI ne rejette. Le `finally` de envoyerTxSeeker ne s'execute
+   alors jamais, le verrou reste pose et le bouton reste grise pour de bon.
+   Toute attente d'un wallet passe donc par une borne de temps. */
+const DELAI_SIGNATURE = 90000;   /* le joueur doit avoir le temps de lire */
+const DELAI_RECONNEXION = 30000;
+function avecDelai(promesse, ms, quoi){
+  let t;
+  return Promise.race([
+    Promise.resolve(promesse).finally(()=>clearTimeout(t)),
+    new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error('timeout:'+quoi)), ms); })
+  ]);
+}
 async function signerEtEnvoyer(tx){
   let sig=null;
   /* Une extension connectee avant un rechargement doit etre retrouvee,
      sinon on basculait a tort vers le Seed Vault. */
-  await retrouverProvider();
+  await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
   if(_providerExt){
     const p=_providerExt;
     /* On demande la SIGNATURE, puis on diffuse nous-memes sur le devnet.
        signAndSendTransaction diffuserait sur le reseau selectionne dans le
        wallet (mainnet par defaut) : notre blockhash devnet y est inconnu. */
     if(typeof p.signTransaction==='function'){
-      const signee = await p.signTransaction(tx);
-      sig = await CHAINE.connexion.sendRawTransaction(signee.serialize());
+      const signee = await avecDelai(p.signTransaction(tx), DELAI_SIGNATURE, 'signature');
+      sig = await diffuser(signee.serialize());
       LOG.log('[SEEKER] signature via wallet puis diffusion devnet');
     } else if(typeof p.signAndSendTransaction==='function'){
-      const r = await p.signAndSendTransaction(tx);
+      const r = await avecDelai(p.signAndSendTransaction(tx), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via wallet (signAndSendTransaction)');
     } else if(typeof p.request==='function'){
-      const r = await p.request({ method:'signAndSendTransaction', params:{ message: tx } });
+      const r = await avecDelai(p.request({ method:'signAndSendTransaction', params:{ message: tx } }), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via extension (request)');
     } else {
@@ -131,11 +326,12 @@ async function signerEtEnvoyer(tx){
     }
     const mwa = await initMWA();
     if(!mwa || !mwa.transact){ CHAINE.derniereErreur='module Seed Vault non charge'; return null; }
-    const sigs = await mwa.transact(async (wallet)=>{
+    /* Le Seed Vault peut lui aussi ne jamais revenir : meme borne. */
+    const sigs = await avecDelai(mwa.transact(async (wallet)=>{
       const jeton = localStorage.getItem('ss_mwa_token');
       if(jeton){ try{ await wallet.reauthorize({ auth_token:jeton, identity:IDENTITE }); }catch(e){} }
       return await wallet.signAndSendTransactions({ transactions:[tx] });
-    });
+    }), DELAI_SIGNATURE, 'signature');
     sig = sigs && sigs[0];
     LOG.log('[SEEKER] signature via Seed Vault');
   }
@@ -157,6 +353,7 @@ async function chargerSPL(){
    Retourne un nombre de tokens (pas des unites brutes). */
 async function lireSoldeSKR(){
   if(!S.walletReel || !S.addressComplete) return 0;
+  if(skrIndisponible()){ S.soldeSkr=0; return 0; }   /* situation attendue, pas une erreur */
   const w3=await chargerWeb3(); if(!w3) return 0;
   try{
     const { PublicKey } = w3;
@@ -216,11 +413,14 @@ function instructionsSeekerTask(w3, joueur){
    Si `action` vaut 'seeker-task', on envoie les 15 memos d'un coup. */
 async function envoyerTxSeeker(action){
   if(!S.walletReel || !S.addressComplete) return null;    /* pas de wallet : rien on-chain */
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
   if(CHAINE.enCours) return null;                          /* une transaction a la fois */
-  const w3 = await chargerWeb3();
-  if(!w3){ CHAINE.derniereErreur='web3.js indisponible (reseau ?)'; return null; }
   CHAINE.enCours=true;
   try{
+    const w3 = await chargerWeb3();
+    if(!w3){ CHAINE.derniereErreur='web3.js indisponible (reseau ?)'; return null; }
     const { PublicKey, Transaction, TransactionInstruction } = w3;
     /* Une sauvegarde ancienne peut contenir une adresse base64 : on la repare
        au lieu de laisser la transaction echouer. */
@@ -233,20 +433,27 @@ async function envoyerTxSeeker(action){
       LOG.log('[SEEKER] adresse convertie en base58');
     }
     const joueur = new PublicKey(adresse);
-    const { blockhash } = await CHAINE.connexion.getLatestBlockhash();
+    const blockhash = await blockhashFrais();
     const tx = new Transaction({ feePayer: joueur, recentBlockhash: blockhash });
     if(action==='seeker-task'){
       /* Les 15 memos + le pourboire : une transaction, une signature. */
       instructionsSeekerTask(w3, joueur).forEach(i=>tx.add(i));
     } else {
+      /* Le blockhash est garde 40 s. Deux fois la meme action dans cette
+         fenetre produisaient une transaction identique bit pour bit, donc la
+         MEME signature : le reseau rejetait la seconde en « already
+         processed ». Le marqueur combine l'heure ET un compteur : deux
+         envois tombant dans la meme milliseconde restaient sinon identiques.
+         (instructionsSeekerTask a deja le sien via `lot`.) */
+      const texteMemo = 'seeker-strike:'+action+':'+marqueurUnique();
       tx.add(new TransactionInstruction({
         keys: [{ pubkey: joueur, isSigner: true, isWritable: false }],
         programId: new PublicKey(CHAINE.memoProgram),
         /* web3.js attend un Buffer ; un Uint8Array nu casse serialize()
            sur certaines versions du polyfill. */
         data: (typeof Buffer!=='undefined' && Buffer.from)
-                ? Buffer.from('seeker-strike:'+action, 'utf8')
-                : new TextEncoder().encode('seeker-strike:'+action)
+                ? Buffer.from(texteMemo, 'utf8')
+                : new TextEncoder().encode(texteMemo)
       }));
     }
 
@@ -259,8 +466,12 @@ async function envoyerTxSeeker(action){
     }
     return sig||null;
   }catch(e){
-    CHAINE.derniereErreur = (e && (e.message||e.toString())) || 'erreur inconnue';
-    LOG.warn('[SEEKER] transaction refusee ou echouee : '+CHAINE.derniereErreur);
+    CHAINE.derniereErreur = causeLisible(e) || 'erreur inconnue';
+    /* Blockhash refuse par le reseau : le cache tient une valeur morte.
+       Sans cette purge, les 40 s suivantes echouaient toutes de la meme facon. */
+    if(/blockhash not found|block height exceeded/i.test(String((e&&(e.message||e))||''))) invaliderBlockhash();
+    LOG.warn('[SEEKER] transaction refusee ou echouee : '+CHAINE.derniereErreur
+             +' | brut : '+String((e&&(e.message||e))||''));
     return null;
   }finally{ CHAINE.enCours=false; }
 }
@@ -497,7 +708,7 @@ async function toggleWallet(){
       /* Echec : on reste franchement deconnecte. Le detail de la cause
          a deja ete journalise par le canal de connexion. */
       S.connected=false; S.walletReel=false; S.address=''; S.addressComplete=''; S.soldeSkr=0;
-      const cause = CHAINE.derniereErreur ? ' \u2022 '+String(CHAINE.derniereErreur).slice(0,60) : '';
+      const cause = CHAINE.derniereErreur ? ' \u2022 '+T(String(CHAINE.derniereErreur)).slice(0,60) : '';
       CHAINE.derniereErreur=null;
       toast('\u274c '+T('Connexion échouée')+(wallet?' \u2014 '+wallet.name:'')+cause, 4200);
       save(); ui();
@@ -541,9 +752,19 @@ function taskFaites(){ return S.txOnChain||0; }   /* uniquement des TX reelles *
    qu'une fois. Relançable autant de fois qu'on veut, meme deja complete :
    c'est ce qui alimente l'activite Solana du compte. Le bonus, lui, ne tombe
    qu'a la premiere completion. */
+/* Delai minimal entre deux lots. Sans lui, un joueur qui enchaine les envois
+   depasse la limite du RPC public et ne recoit plus que des erreurs 429. */
+const DELAI_LOT = 20000;
+let _dernierLot = 0;
+function attenteLot(){
+  const reste = DELAI_LOT - (Date.now()-_dernierLot);
+  return reste>0 ? Math.ceil(reste/1000) : 0;
+}
 async function envoyerSeekerTask(){
   if(!S.connected) return toast('Connecte ton wallet d\'abord');
   if(CHAINE.enCours) return toast('Transaction en cours\u2026');
+  const attente = attenteLot();
+  if(attente) return toast('\u23f3 '+T('Patiente')+' '+attente+'s \u2014 '+T('le réseau devnet limite les envois'), 2800);
   const rejoue = taskFaites()>=15;
 
   if(!S.walletReel) return toast(T('Connecte un wallet pour envoyer des transactions'), 3000);
@@ -551,13 +772,16 @@ async function envoyerSeekerTask(){
   const cout = (TRESORERIE.actif && TRESORERIE.frais>0)
     ? ' \u2022 '+TRESORERIE.frais+' SOL de soutien' : '';
   toast('\u270d\ufe0f 15 TX en une signature'+cout+'\u2026', 3200);
+  majSeekerTask();                    /* le bouton passe en « signature en cours » */
   const sig = await envoyerTxSeeker('seeker-task');
+  majSeekerTask();                    /* et revient a l'etat normal, succes ou echec */
   if(!sig){
     /* On affiche la vraie cause : sans elle le joueur ne peut rien corriger. */
-    const cause = CHAINE.derniereErreur ? ' \u2022 '+String(CHAINE.derniereErreur).slice(0,70) : '';
+    const cause = CHAINE.derniereErreur ? ' \u2022 '+T(String(CHAINE.derniereErreur)).slice(0,70) : '';
     CHAINE.derniereErreur=null;
-    return toast('\u274c TX echouee'+cause, 5000);
+    return toast('\u274c '+T('TX échouée')+cause, 5000);
   }
+  _dernierLot = Date.now();
   S.txOnChain=15;
   S.lotsTask=(S.lotsTask||0)+1;
   creditTX(15);                     /* 15 memos confirmes = 15 TX on-chain */
@@ -576,6 +800,71 @@ function finTaskSiComplete(){
   Audio2.jouerSfx('levelup'); haptique('victoire');
 }
 
+let _tickLot=0;
+/* ---- Panneau « Serveur Solana » des reglages ----
+   Le RPC public est sature en permanence sur une IP mobile. Plutot que de
+   subir, on laisse le joueur coller son propre endpoint : il passe en tete
+   du pool et le probleme disparait. Un bouton de test fait un vrai appel. */
+function renderRpc(){
+  const c=document.getElementById('panneau-rpc'); if(!c) return;
+  const perso = txtSur(S.rpcPerso||'');
+  const actif = txtSur(CHAINE.rpc||'');
+  const morts = RPC_DEVNET.filter(u=>RPC_MORTS[u]).length;
+  c.innerHTML =
+    '<div class="danger-carte" style="border-color:#14F19533">'
+   +  '<div class="t"><span style="font-size:15px">&#128225;</span><b style="color:#14F195">'+T('Serveur Solana (RPC)')+'</b></div>'
+   +  '<p>'+T('Le serveur public est souvent saturé. Colle ton propre endpoint devnet (Helius, QuickNode, Alchemy — offre gratuite suffisante) : il sera utilisé en priorité.')+'</p>'
+   +  '<input id="rpc-perso" type="url" inputmode="url" autocomplete="off" spellcheck="false" '
+   +    'placeholder="https://devnet.helius-rpc.com/?api-key=..." value="'+perso+'" '
+   +    'style="width:100%;padding:9px 10px;border-radius:10px;background:#0c0c14;border:1px solid #2a2a3a;'
+   +    'color:#e5e7eb;font-size:10.5px;font-family:monospace;margin-bottom:8px">'
+   +  '<div style="display:flex;gap:6px">'
+   +    '<button onclick="testerRpc()" class="btn-dark" style="flex:1;padding:8px;border-radius:10px;font-size:10.5px;font-weight:700">'+T('TESTER')+'</button>'
+   +    '<button onclick="enregistrerRpc()" class="btn" style="flex:1;padding:8px;border-radius:10px;font-size:10.5px;font-weight:700;background:linear-gradient(135deg,#0891b2,#14F195)">'+T('ENREGISTRER')+'</button>'
+   +    (perso ? '<button onclick="oublierRpc()" class="btn-dark" style="padding:8px 10px;border-radius:10px;font-size:10.5px">'+T('EFFACER')+'</button>' : '')
+   +  '</div>'
+   +  '<div id="rpc-etat" style="font-size:9.5px;color:#7c7a8c;margin-top:8px;word-break:break-all">'
+   +    T('Serveur actif')+' : '+actif + (morts ? ' &bull; '+morts+' '+T('écarté(s)') : '')
+   +  '</div>'
+   + '</div>';
+}
+/* Enregistre l'endpoint : validation de forme, puis reconstruction du pool. */
+function enregistrerRpc(){
+  const el=document.getElementById('rpc-perso'); if(!el) return;
+  const v=String(el.value||'').trim();
+  if(v && !/^https:\/\/[^\s]+$/i.test(v)) return toast('\u274c '+T('Adresse invalide : elle doit commencer par https://'), 3200);
+  S.rpcPerso = v;
+  save();
+  reconstruirePool();
+  renderRpc();
+  toast(v ? '\u2705 '+T('Serveur enregistré') : T('Retour aux serveurs publics'), 2400);
+}
+function oublierRpc(){
+  S.rpcPerso=''; save(); reconstruirePool(); renderRpc();
+  toast(T('Retour aux serveurs publics'), 2200);
+}
+/* Test reel : on demande un blockhash a l'endpoint saisi et on chronometre.
+   C'est le seul moyen honnete de savoir si un RPC marche depuis CE reseau. */
+async function testerRpc(){
+  const el=document.getElementById('rpc-perso');
+  const etat=document.getElementById('rpc-etat');
+  const url = (el && String(el.value||'').trim()) || CHAINE.rpc;
+  if(etat) etat.innerHTML = T('Test en cours')+'\u2026';
+  const w3 = await chargerWeb3();
+  if(!w3){ if(etat) etat.innerHTML='\u274c '+T('web3.js indisponible'); return; }
+  const t0=Date.now();
+  try{
+    const co = new w3.Connection(url, 'confirmed');
+    const r  = await co.getLatestBlockhash();
+    const ms = Date.now()-t0;
+    if(etat) etat.innerHTML = '\u2705 '+T('Répond en')+' '+ms+' ms &bull; blockhash '+txtSur(String(r.blockhash).slice(0,8))+'\u2026';
+    LOG.log('[SEEKER] test RPC ok : '+url+' ('+ms+' ms)');
+  }catch(e){
+    if(etat) etat.innerHTML = '\u274c '+txtSur(T(causeLisible(e)));
+    LOG.warn('[SEEKER] test RPC echoue : '+url+' \u2014 '+(e&&e.message));
+  }
+}
+
 /* Met a jour la carte Seeker Task de l'accueil */
 function majSeekerTask(){
   const f=taskFaites();
@@ -584,9 +873,20 @@ function majSeekerTask(){
   const bd=document.getElementById('air-badge'); if(bd) bd.classList.toggle('hidden', f<15);
   const b=document.getElementById('btn-task');
   if(b){
-    /* Relançable meme complete : renvoyer un lot entretient l'activite du compte. */
-    b.disabled=false; b.style.opacity=1;
-    b.textContent = (f>=15) ? 'RELANCER LES 15 TX' : 'ENVOYER LES 15 TX';
+    /* Relançable meme complete : renvoyer un lot entretient l'activite du compte.
+       Trois etats a montrer, sinon le joueur ne sait pas ce qui se passe :
+       envoi en cours, delai anti-saturation, disponible. */
+    const att = attenteLot();
+    if(CHAINE.enCours){
+      b.disabled=true; b.style.opacity=0.55;
+      b.textContent = T('SIGNATURE EN COURS…');
+      clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask, 700);
+    } else {
+      b.disabled = att>0; b.style.opacity = att>0 ? 0.55 : 1;
+      b.textContent = att>0 ? (T('PATIENTE')+' '+att+'s')
+                            : ((f>=15) ? T('RELANCER LES 15 TX') : T('ENVOYER LES 15 TX'));
+      if(att>0){ clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask,1000); }
+    }
   }
   const e=document.getElementById('task-etat');
   if(e) e.textContent = S.walletReel ? T('Wallet connecté • devnet') : T('Wallet non connecté');
@@ -932,12 +1232,13 @@ function renderPrep(){
      serait une mauvaise surprise. */
   const capBox=document.getElementById('prep-cap-boosts');
   if(capBox){
-    const nd=S.currentNode||0;
-    const base=(BOOSTS_BASE.find(p=>nd<=p.jusqu)||BOOSTS_BASE[BOOSTS_BASE.length-1]).max;
-    const f=BOOSTS_DIFFICULTE[loadout.difficulte] ?? 1;
-    const cap=Math.max(1, Math.round(base*f));
-    capBox.textContent=T('Boosts : {0} max', cap)+
-      (f<1 ? ' \u00b7 '+T(loadout.difficulte==='extreme'?'Extrême':'Difficile') : '');
+    const r=BOOSTS_REGLAGE[loadout.difficulte]||BOOSTS_REGLAGE.normal;
+    /* En Extreme il n'y a aucune recharge par les kills : on l'annonce
+       clairement plutot que d'afficher un seuil qui ne sert jamais. */
+    capBox.textContent = (r.recharges===0)
+      ? T('Boosts : 1 de chaque · aucune recharge, sauf boss terrassé')
+      : T('Boosts : 1 de chaque · recharge tous les {0} ennemis', r.seuil)
+        + (r.recharges===1 ? ' \u00b7 '+T('1 seule fois') : '');
   }
   document.getElementById('prep-bonuses').innerHTML=BONUSES.map(b=>{
     const charges=S.charges[b.chargesKey]||0;
@@ -975,7 +1276,7 @@ function launchMission(){
   const lancer=()=>initGame(mode, mun);
   if(tr && !(S.trVues||[]).includes(S.currentNode)){
     S.trVues=(S.trVues||[]).concat(S.currentNode); save();
-    afficherTransmission(tr.de, tr.txt, lancer, tr.de==='ALERTE'?'#f87171':tr.de==='NEXUS'?'#e879f9':'#14F195');
+    afficherTransmission(T(tr.de), T(tr.txt), lancer, tr.de==='ALERTE'?'#f87171':tr.de==='NEXUS'?'#e879f9':'#14F195');
   } else lancer(); }
 function abortMission(){ if(G&&G.running){ G.running=false; cancelAnimationFrame(G.raf); stopMusic(); } show('map'); }
 

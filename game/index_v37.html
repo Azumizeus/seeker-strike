@@ -17,7 +17,7 @@
 <meta name="x5-orientation" content="portrait"/>
 <meta name="full-screen" content="yes"/>
 <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlNlZWtlciBTdHJpa2Ug4oCUIEdlbmVzaXMgUHJvdG9jb2wiLCAic2hvcnRfbmFtZSI6ICJTZWVrZXIgU3RyaWtlIiwgImRlc2NyaXB0aW9uIjogIlNob290J2VtIHVwIHNwYXRpYWwgbW9iaWxlLWZpcnN0IHBvdXIgU29sYW5hIFNlZWtlci4iLCAic3RhcnRfdXJsIjogIi4vIiwgImRpc3BsYXkiOiAiZnVsbHNjcmVlbiIsICJvcmllbnRhdGlvbiI6ICJwb3J0cmFpdCIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwNTA1MGEiLCAidGhlbWVfY29sb3IiOiAiIzA1MDUwYSIsICJjYXRlZ29yaWVzIjogWyJnYW1lcyIsICJlbnRlcnRhaW5tZW50Il19"/>
-<title>Seeker Strike • Genesis Protocol v4.0</title>
+<title>Seeker Strike • Genesis Protocol v4.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--p:#9945FF;--g:#14F195;--bg:#05050a}
@@ -620,7 +620,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
           <div id="logo" class="pastille" title="Seeker Nexus"></div>
           <div style="flex:1;min-width:0">
             <h1>SEEKER STRIKE</h1>
-            <div class="ver">GENESIS PROTOCOL v4.2 &bull; <span style="color:#fbbf24">DEVNET</span></div>
+            <div class="ver">GENESIS PROTOCOL v4.4 &bull; <span style="color:#fbbf24">DEVNET</span></div>
           </div>
           <button onclick="show('settings')" aria-label="R&eacute;glages" class="glass w-9 h-9 rounded-xl flex items-center justify-center" style="flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="#c4b5fd"><path d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.07-1.58zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg></button>
         </div>
@@ -1073,7 +1073,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
       <div id="panneau-paliers"></div>
       <div id="panneau-journal"></div>
       <div id="panneau-dons"></div>
-    <div onclick="tapVersion()" class="text-center text-[9.5px] text-gray-600 mt-5" style="cursor:pointer;user-select:none">Seeker Strike &bull; Genesis Protocol v4.2 &bull; <span onclick="tapDevnet(event)" style="color:#fbbf24;cursor:pointer">DEVNET</span></div>
+    <div onclick="tapVersion()" class="text-center text-[9.5px] text-gray-600 mt-5" style="cursor:pointer;user-select:none">Seeker Strike &bull; Genesis Protocol v4.4 &bull; <span onclick="tapDevnet(event)" style="color:#fbbf24;cursor:pointer">DEVNET</span></div>
   </div>
 </div>
 
@@ -3350,6 +3350,14 @@ function rpcSuivant(){
 }
 const pause = ms => new Promise(r=>setTimeout(r,ms));
 
+/* Marqueur unique pour differencier deux transactions par ailleurs
+   identiques. L'horloge seule ne suffit pas : deux appels dans la meme
+   milliseconde rendaient la meme valeur, donc la meme signature. */
+let _seqMemo = 0;
+function marqueurUnique(){
+  return Date.now().toString(36) + '-' + ((_seqMemo++) % 46656).toString(36);
+}
+
 /* Un blockhash reste valide environ une minute (150 blocs). Le redemander a
    chaque envoi etait la source principale des 429 : on le garde en memoire.
    La fenetre est nommee pour que les tests ne codent pas le nombre en dur. */
@@ -3399,7 +3407,13 @@ async function diffuser(brut){
 }
 /* Traduit une erreur technique en une phrase comprehensible. */
 function causeLisible(e){
-  const brut=String((e&&(e.message||e))||'');
+  /* Un rejet peut arriver en objet sans message : String() rendait alors
+     « [object Object] », affiche tel quel au joueur. On le neutralise. */
+  let brut=String((e&&(e.message||e))||'');
+  if(brut==='[object Object]'){
+    try{ brut=JSON.stringify(e)||''; }catch(x){ brut=''; }
+    if(brut==='{}') brut='';
+  }
   /* Plus aucun endpoint utilisable : on dit quoi faire, pas juste que ca rate. */
   if(brut==='AUCUN_RPC' || poolEpuise()) return 'réseau devnet indisponible, réessaie dans 1 minute';
   if(/union of|expected the value to satisfy/i.test(brut)) return 'serveur RPC indisponible, bascule automatique';
@@ -3407,8 +3421,16 @@ function causeLisible(e){
   if(estSature(e)) return 'reseau devnet saturé, patiente quelques secondes';
   if(/blockhash not found|block height exceeded/i.test(brut)) return 'transaction expirée, relance-la';
   if(/insufficient|0x1\b/i.test(brut)) return 'solde SOL devnet insuffisant';
-  if(/user rejected|declined|cancell?ed/i.test(brut)) return 'signature refusée dans le wallet';
-  return brut.slice(0,70);
+  /* Le wallet n'a jamais repondu : ce n'est pas un refus, on invite a reessayer. */
+  if(/^timeout:/.test(brut)) return 'le wallet n\'a pas répondu, réessaie';
+  /* Solflare dit « Transaction rejected », Backpack renvoie le code 4001 :
+     ni l'un ni l'autre n'etait reconnu, le joueur voyait l'anglais brut. */
+  if(/reject|refus|declined|denied|cancell?ed|\b4001\b/i.test(brut)) return 'signature refusée dans le wallet';
+  /* Deux fois la meme transaction dans la fenetre du blockhash. */
+  if(/already been processed|duplicate/i.test(brut)) return 'transaction déjà envoyée, patiente un instant';
+  /* Un rejet en objet vide donnait une chaine vide, donc le « erreur inconnue »
+     generique que l'on voulait justement supprimer. */
+  return brut.slice(0,70) || 'le wallet a refusé sans préciser la raison';
 }
 
 /* Retrouve le provider d'extension apres un rechargement de page.
@@ -3417,7 +3439,12 @@ function causeLisible(e){
 async function retrouverProvider(){
   if(_providerExt) return _providerExt;
   if(!S.walletReel || S.walletType==='mwa') return null;
-  const p = getProvider(S.walletId) || getProvider('phantom') || window.solana;
+  /* Sans filtre, un joueur Solflare dont l'extension tarde a s'injecter se
+     voyait servir Phantom, et le bloc « compte actif » plus bas ecrasait son
+     adresse par celle d'un AUTRE wallet, sans un mot. On ne cherche ailleurs
+     que si aucun wallet n'a ete choisi. */
+  const p = S.walletId ? getProvider(S.walletId)
+          : (getProvider('phantom') || getProvider('solflare') || window.solana);
   if(!p) return null;
   try{
     if(!p.publicKey && typeof p.connect==='function'){
@@ -3431,10 +3458,12 @@ async function retrouverProvider(){
     if(!adr) return null;
     /* Le wallet a pu changer de compte entre-temps : on suit le compte actif. */
     if(adr!==S.addressComplete){
+      /* On ne suit que le changement de compte DANS le wallet choisi : la
+         trace dit lequel, pour qu'un ecrasement se voie dans le journal. */
+      dbg('compte actif change dans '+(S.walletId||'solana')+', adresse mise a jour');
       S.addressComplete=adr;
       S.address=adr.slice(0,4)+'\u2026'+adr.slice(-4);
       save(); ui();
-      dbg('compte actif different, adresse mise a jour');
     }
     _providerExt=p;
     dbg('provider retrouve : '+(S.walletId||'solana'));
@@ -3445,26 +3474,40 @@ async function retrouverProvider(){
 /* Signe une transaction et la diffuse sur le devnet.
    Trois canaux possibles selon la facon dont le joueur s'est connecte :
    sans ce choix, la demande de signature partait dans le vide. */
+/* Aucun wallet ne garantit de repondre. Fenetre fermee par le systeme,
+   application wallet tuee en arriere-plan, WebView suspendue : la promesse
+   ne se resout NI ne rejette. Le `finally` de envoyerTxSeeker ne s'execute
+   alors jamais, le verrou reste pose et le bouton reste grise pour de bon.
+   Toute attente d'un wallet passe donc par une borne de temps. */
+const DELAI_SIGNATURE = 90000;   /* le joueur doit avoir le temps de lire */
+const DELAI_RECONNEXION = 30000;
+function avecDelai(promesse, ms, quoi){
+  let t;
+  return Promise.race([
+    Promise.resolve(promesse).finally(()=>clearTimeout(t)),
+    new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error('timeout:'+quoi)), ms); })
+  ]);
+}
 async function signerEtEnvoyer(tx){
   let sig=null;
   /* Une extension connectee avant un rechargement doit etre retrouvee,
      sinon on basculait a tort vers le Seed Vault. */
-  await retrouverProvider();
+  await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
   if(_providerExt){
     const p=_providerExt;
     /* On demande la SIGNATURE, puis on diffuse nous-memes sur le devnet.
        signAndSendTransaction diffuserait sur le reseau selectionne dans le
        wallet (mainnet par defaut) : notre blockhash devnet y est inconnu. */
     if(typeof p.signTransaction==='function'){
-      const signee = await p.signTransaction(tx);
+      const signee = await avecDelai(p.signTransaction(tx), DELAI_SIGNATURE, 'signature');
       sig = await diffuser(signee.serialize());
       LOG.log('[SEEKER] signature via wallet puis diffusion devnet');
     } else if(typeof p.signAndSendTransaction==='function'){
-      const r = await p.signAndSendTransaction(tx);
+      const r = await avecDelai(p.signAndSendTransaction(tx), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via wallet (signAndSendTransaction)');
     } else if(typeof p.request==='function'){
-      const r = await p.request({ method:'signAndSendTransaction', params:{ message: tx } });
+      const r = await avecDelai(p.request({ method:'signAndSendTransaction', params:{ message: tx } }), DELAI_SIGNATURE, 'signature');
       sig = (r && (r.signature || r)) || null;
       LOG.log('[SEEKER] signature via extension (request)');
     } else {
@@ -3485,11 +3528,12 @@ async function signerEtEnvoyer(tx){
     }
     const mwa = await initMWA();
     if(!mwa || !mwa.transact){ CHAINE.derniereErreur='module Seed Vault non charge'; return null; }
-    const sigs = await mwa.transact(async (wallet)=>{
+    /* Le Seed Vault peut lui aussi ne jamais revenir : meme borne. */
+    const sigs = await avecDelai(mwa.transact(async (wallet)=>{
       const jeton = localStorage.getItem('ss_mwa_token');
       if(jeton){ try{ await wallet.reauthorize({ auth_token:jeton, identity:IDENTITE }); }catch(e){} }
       return await wallet.signAndSendTransactions({ transactions:[tx] });
-    });
+    }), DELAI_SIGNATURE, 'signature');
     sig = sigs && sigs[0];
     LOG.log('[SEEKER] signature via Seed Vault');
   }
@@ -3597,14 +3641,21 @@ async function envoyerTxSeeker(action){
       /* Les 15 memos + le pourboire : une transaction, une signature. */
       instructionsSeekerTask(w3, joueur).forEach(i=>tx.add(i));
     } else {
+      /* Le blockhash est garde 40 s. Deux fois la meme action dans cette
+         fenetre produisaient une transaction identique bit pour bit, donc la
+         MEME signature : le reseau rejetait la seconde en « already
+         processed ». Le marqueur combine l'heure ET un compteur : deux
+         envois tombant dans la meme milliseconde restaient sinon identiques.
+         (instructionsSeekerTask a deja le sien via `lot`.) */
+      const texteMemo = 'seeker-strike:'+action+':'+marqueurUnique();
       tx.add(new TransactionInstruction({
         keys: [{ pubkey: joueur, isSigner: true, isWritable: false }],
         programId: new PublicKey(CHAINE.memoProgram),
         /* web3.js attend un Buffer ; un Uint8Array nu casse serialize()
            sur certaines versions du polyfill. */
         data: (typeof Buffer!=='undefined' && Buffer.from)
-                ? Buffer.from('seeker-strike:'+action, 'utf8')
-                : new TextEncoder().encode('seeker-strike:'+action)
+                ? Buffer.from(texteMemo, 'utf8')
+                : new TextEncoder().encode(texteMemo)
       }));
     }
 
@@ -3923,7 +3974,9 @@ async function envoyerSeekerTask(){
   const cout = (TRESORERIE.actif && TRESORERIE.frais>0)
     ? ' \u2022 '+TRESORERIE.frais+' SOL de soutien' : '';
   toast('\u270d\ufe0f 15 TX en une signature'+cout+'\u2026', 3200);
+  majSeekerTask();                    /* le bouton passe en « signature en cours » */
   const sig = await envoyerTxSeeker('seeker-task');
+  majSeekerTask();                    /* et revient a l'etat normal, succes ou echec */
   if(!sig){
     /* On affiche la vraie cause : sans elle le joueur ne peut rien corriger. */
     const cause = CHAINE.derniereErreur ? ' \u2022 '+T(String(CHAINE.derniereErreur)).slice(0,70) : '';
@@ -4023,12 +4076,19 @@ function majSeekerTask(){
   const b=document.getElementById('btn-task');
   if(b){
     /* Relançable meme complete : renvoyer un lot entretient l'activite du compte.
-       Pendant le delai anti-saturation, le bouton montre le temps restant. */
+       Trois etats a montrer, sinon le joueur ne sait pas ce qui se passe :
+       envoi en cours, delai anti-saturation, disponible. */
     const att = attenteLot();
-    b.disabled = att>0; b.style.opacity = att>0 ? 0.55 : 1;
-    b.textContent = att>0 ? (T('PATIENTE')+' '+att+'s')
-                          : ((f>=15) ? T('RELANCER LES 15 TX') : T('ENVOYER LES 15 TX'));
-    if(att>0){ clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask,1000); }
+    if(CHAINE.enCours){
+      b.disabled=true; b.style.opacity=0.55;
+      b.textContent = T('SIGNATURE EN COURS…');
+      clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask, 700);
+    } else {
+      b.disabled = att>0; b.style.opacity = att>0 ? 0.55 : 1;
+      b.textContent = att>0 ? (T('PATIENTE')+' '+att+'s')
+                            : ((f>=15) ? T('RELANCER LES 15 TX') : T('ENVOYER LES 15 TX'));
+      if(att>0){ clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask,1000); }
+    }
   }
   const e=document.getElementById('task-etat');
   if(e) e.textContent = S.walletReel ? T('Wallet connecté • devnet') : T('Wallet non connecté');
@@ -7140,6 +7200,10 @@ const EN = {
 "RELANCER LES 15 TX": "RESEND ALL 15 TX",
 "ENVOYER LES 15 TX": "SEND ALL 15 TX",
 "PATIENTE": "WAIT",
+"SIGNATURE EN COURS…": "SIGNING…",
+"le wallet n'a pas répondu, réessaie": "the wallet did not respond, try again",
+"transaction déjà envoyée, patiente un instant": "transaction already sent, wait a moment",
+"le wallet a refusé sans préciser la raison": "the wallet declined without giving a reason",
 "Patiente": "Hold on",
 "le réseau devnet limite les envois": "the devnet network throttles sends",
 "reseau devnet saturé, patiente quelques secondes": "devnet network is busy, wait a few seconds",

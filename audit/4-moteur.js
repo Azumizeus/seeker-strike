@@ -1,10 +1,10 @@
 /* ============================================================
-   SEEKER STRIKE v4.2 - 4-moteur.js
-   Moteur de jeu
-   Lignes 3030 a 5101 du script d'origine (game/index_v37.html)
-   Images base64 retirees : elles ne concernent pas l'audit.
+   SEEKER STRIKE v4.4 - 4-moteur.js
+   Moteur de jeu : boucle, rendu, ennemis, boss
+   Lignes 3400 a 5599 du script (game/index_v37.html)
+   Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
+   La source de verite est game/index_v37.html.
    ============================================================ */
-
 function initGame(mode, mun){
   const canvas=document.getElementById('gc');
   const ctx=canvas.getContext('2d');
@@ -27,7 +27,8 @@ function initGame(mode, mun){
     score:0, frags:0, kills:0,
      lives:mode.lives+(S.bonusVies||0)+((S.consommables&&S.consommables.vies)||0),
      multDrops:((S.consommables&&S.consommables.drops)||1)*(mode.multDropsNoeud||1),
-     rareteButin:(RARETE_DIFFICULTE[loadout.difficulte]||1), viesLarguees:0, boostsUtilises:0,
+     rareteButin:(RARETE_DIFFICULTE[loadout.difficulte]||1), viesLarguees:0,
+     boostsUtilises:{}, boostsRecharges:0, boostsBonus:0,
      multDegats:(S.consommables&&S.consommables.degats)||1,
     wave:1, combo:1, comboTimer:0,
     lastShot:0, spawnT:0, waveT:0, frame:0,
@@ -104,38 +105,84 @@ function directionClavier(){
    selon l'avancement dans la campagne et la difficulte choisie.
    Le stock, lui, n'est jamais confisque : il ressert plus loin.
    ============================================================ */
-const BOOSTS_BASE = [                 /* selon le secteur atteint */
-  {jusqu:3,  max:1},                  /* N0-N3   : decouverte, 1 seul appel */
-  {jusqu:7,  max:2},                  /* N4-N7   : premiers boss */
-  {jusqu:12, max:3},                  /* N8-N12  : fin de GENESIS */
-  {jusqu:17, max:4},                  /* N13-N17 : CHAOS */
-  {jusqu:99, max:5}                   /* N18+    : derniere ligne droite */
-];
-/* Plus c'est dur, moins on s'appuie sur les boosts : c'est ce qui
-   distingue une victoire en extreme d'une victoire achetee. */
-const BOOSTS_DIFFICULTE = { normal:1.0, difficile:0.7, extreme:0.5 };
-
-function plafondBoosts(){
-  if(!G) return 99;
-  /* Modes libres : ils n'ont pas de secteur, on leur donne un forfait fixe.
-     Ils se reconnaissent au numero de secteur negatif. */
-  if((S.currentNode||0) < 0) return 3;
-  const nd = S.currentNode||0;
-  const base = (BOOSTS_BASE.find(p=>nd<=p.jusqu) || BOOSTS_BASE[BOOSTS_BASE.length-1]).max;
-  const f = BOOSTS_DIFFICULTE[loadout.difficulte] ?? 1;
-  return Math.max(1, Math.round(base*f));
+/* ============================================================
+   BOOSTS : UNE CHARGE DE CHAQUE, QUI SE REGAGNE EN JOUANT
+   Le plafond global precedent etait une erreur : avec une seule
+   activation autorisee, on choisissait un boost et les deux autres
+   ne servaient jamais. Desormais chaque type a son propre compteur,
+   et abattre des ennemis en redonne. Le stock de la boutique reste
+   la limite haute : on ne peut pas depenser ce qu'on n'a pas.
+   ============================================================ */
+/* Tout le reglage tient ici : une charge de chaque au depart, puis des
+   recharges gagnees en abattant des ennemis. Le seuil monte avec la
+   difficulte, sinon l'Extreme — qui envoie 44% d'ennemis en plus —
+   rechargerait plus souvent. C'est le travers deja corrige sur le butin. */
+const BOOSTS_REGLAGE = {
+  /* Chaque cran divise le plafond par deux : 9, 6, 3.
+     En Extreme on a exactement une charge de chaque — seul un boss
+     terrasse en redonne. C'est la regle la plus lisible du jeu :
+     "une de chaque, et le reste se merite". */
+  normal:    { base:1, recharges:2, seuil:40 },   /* 9 activations max */
+  difficile: { base:1, recharges:1, seuil:55 },   /* 6 activations max */
+  extreme:   { base:1, recharges:0, seuil:0  }    /* 3 : une de chaque, point */
+};
+function reglageBoosts(){
+  return BOOSTS_REGLAGE[loadout.difficulte] || BOOSTS_REGLAGE.normal;
 }
-function boostsRestants(){ return Math.max(0, plafondBoosts() - ((G&&G.boostsUtilises)||0)); }
+function seuilRecharge(){ return reglageBoosts().seuil; }
+/* Combien d'activations restent pour CE type de boost. */
+function boostsRestantsType(type){
+  if(!G) return 99;
+  const u = (G.boostsUtilises && G.boostsUtilises[type]) || 0;
+  const gagnees = (G.boostsRecharges||0) + (G.boostsBonus||0);   /* kills + boss */
+  return Math.max(0, reglageBoosts().base + gagnees - u);
+}
+/* Conserve pour la barre et les tests : total encore activable. */
+function boostsRestants(){
+  return ['mitra','nuke','ghost'].reduce((t,k)=>t+boostsRestantsType(k), 0);
+}
+function plafondBoosts(){
+  const r=reglageBoosts();
+  return (r.base + r.recharges) * 3;      /* hors recharges de boss */
+}
+/* Appele a chaque ennemi abattu : declenche une recharge au seuil. */
+function verifierRechargeBoosts(g){
+  if(!g || g.demo) return;
+  if((g.boostsRecharges||0) >= reglageBoosts().recharges) return;
+  const seuil = seuilRecharge();
+  if((g.kills||0) < seuil * ((g.boostsRecharges||0)+1)) return;
+  g.boostsRecharges = (g.boostsRecharges||0)+1;
+  toast('\u26a1 '+T('BOOSTS RECHARGÉS')+' \u2022 '+seuil+' '+T('ennemis abattus'), 2600);
+  Audio2.jouerSfx('levelup'); haptique('bouton');
+  majBarreBonus();
+}
+/* Terrasser un boss redonne une charge de chaque, hors quota de recharges :
+   c'est le moment ou on en a le plus besoin, et ca recompense l'engagement. */
+function rechargeBoss(g){
+  if(!g || g.demo) return;
+  g.boostsBonus = (g.boostsBonus||0)+1;
+  g.boostsRecharges = (g.boostsRecharges||0);
+  ['mitra','nuke','ghost'].forEach(k=>{
+    if(g.boostsUtilises && g.boostsUtilises[k]>0) g.boostsUtilises[k]--;
+  });
+  toast('\u26a1 '+T('BOSS TERRASSÉ — boosts rechargés'), 3000);
+  majBarreBonus();
+}
 
 function activerBonus(type){
   if(!G || !G.running) return;
   if((S.charges[type]||0)<=0){ toast('Aucune charge de '+type); return; }
-  if(boostsRestants()<=0){
-    toast(T('Plafond de boosts atteint pour ce secteur ({0}/{0})', plafondBoosts()), 2600);
+  if(boostsRestantsType(type)<=0){
+    const s=seuilRecharge(), reste=Math.max(0, s*((G.boostsRecharges||0)+1)-(G.kills||0));
+    toast(((G.boostsRecharges||0) >= reglageBoosts().recharges)
+      ? T('Ce boost est épuisé pour ce secteur')
+      : T('Boost épuisé • encore {0} ennemis pour recharger', reste), 2800);
     return;
   }
   if(G.cooldownBonus>0){ toast('Recharge en cours\u2026',1200); return; }
-  S.charges[type]--; G.boostsUtilises=(G.boostsUtilises||0)+1;
+  S.charges[type]--;
+  G.boostsUtilises=G.boostsUtilises||{};
+  G.boostsUtilises[type]=(G.boostsUtilises[type]||0)+1;
   G.cooldownBonus=90; G.bonusUtilise=true;   /* 1,5 s entre deux activations */
 
   if(type==='mitra'){
@@ -172,7 +219,7 @@ function activateBonus(){
 function majBarreBonus(){
   [['mitra','bonusMitra'],['nuke','bonusNuke'],['ghost','bonusGhost']].forEach(([k,slot])=>{
     const b=document.getElementById('bb-'+k); if(!b) return;
-    const nb=Math.min(S.charges[k]||0, boostsRestants());
+    const nb=Math.min(S.charges[k]||0, boostsRestantsType(k));
     const img=ASSETS[slot];
     b.innerHTML=(img?'<img src="'+img.src+'"/>':'<span style="font-size:18px">'+
       (k==='mitra'?'\ud83d\udd2b':k==='nuke'?'\u2622\ufe0f':'\ud83d\udc7b')+'</span>')+
@@ -418,9 +465,21 @@ function update(){
 function fire(){
   const g=G, mun=g.mun, dmg=(1.15+S.weapon*0.38)*mun.dmg*g.shipBonus*(g.power.perce>0?1.5:1)*(g.multDegats||1);
   const px=g.player.x, py=g.player.y-18;
+  /* Les projectiles lateraux servent la COUVERTURE, pas la puissance.
+     A 90% et 75% des degats du central, le Spread cumulait cinq tirs
+     quasi pleins et faisait 3,3 fois le DPS des autres munitions. Ramenes
+     a 22% et 14%, il reste le meilleur en nappe et le plus faible sur
+     cible unique — ce qui est exactement son role. */
+  const LAT_1 = 0.22, LAT_2 = 0.14;
   g.bullets.push({x:px,y:py,vy:-14,dmg});
-  if(mun.spread>=1 || S.weapon>=2){ g.bullets.push({x:px-12,y:py+4,vy:-13,vx:-0.7,dmg:dmg*0.9}); g.bullets.push({x:px+12,y:py+4,vy:-13,vx:0.7,dmg:dmg*0.9}); }
-  if(mun.spread>=2 || S.weapon>=4){ g.bullets.push({x:px-20,y:py+8,vy:-12,vx:-1.2,dmg:dmg*0.75}); g.bullets.push({x:px+20,y:py+8,vy:-12,vx:1.2,dmg:dmg*0.75}); }
+  if(mun.spread>=1 || S.weapon>=2){
+    g.bullets.push({x:px-12,y:py+4,vy:-13,vx:-0.7,dmg:dmg*LAT_1});
+    g.bullets.push({x:px+12,y:py+4,vy:-13,vx:0.7, dmg:dmg*LAT_1});
+  }
+  if(mun.spread>=2 || S.weapon>=4){
+    g.bullets.push({x:px-20,y:py+8,vy:-12,vx:-1.2,dmg:dmg*LAT_2});
+    g.bullets.push({x:px+20,y:py+8,vy:-12,vx:1.2, dmg:dmg*LAT_2});
+  }
 }
 function fireCompanion(c){ if(!c) return; G.bullets.push({x:c.x, y:c.y-10, vy:-12, dmg:1.3}); }
 
@@ -1061,6 +1120,7 @@ function tuerBoss(g){
                sprite: def.mort || (def.id==='nexus'?'nexusDeath':def.id==='prime'?'primeDeath':null)};
   for(let i=0;i<10;i++) setTimeout(()=>{ if(G) spawnExplosion(b.x+(Math.random()-0.5)*120, b.y+(Math.random()-0.5)*120, 28); }, i*95);
   g.score+=Math.floor(900*g.mode.reward); g.frags+=14; g.kills++;
+  rechargeBoss(g);   /* terrasser un boss redonne une charge de chaque */
   S.totalKills++; S.secretBossKilled=true;
   g.boss=null; g.shake=34; sfx('nuke'); haptique('boss');
   if(def.mini){ g.bossSpawned=false; g.bossTimer=0; g.bossDef=null; }   /* un autre eclaireur viendra */
@@ -1089,6 +1149,7 @@ function kill(e,idx){
   if(e.prime){ base=180; toast('\ud83d\udcb0 Prime encaiss\u00e9e !',1600); }
   g.score+=Math.floor(base*g.combo*g.shipBonus*g.mode.reward);
   g.kills++; S.totalKills++;
+  verifierRechargeBoosts(g);   /* recharge des boosts au seuil d'ennemis */
   if(e.type==='boss'){ g.frags+=7; S.secretBossKilled=true; }
   else g.frags+=e.type==='heavy'?2:1;
   g.combo=Math.min(g.combo+0.32,6.5); g.comboTimer=90;
@@ -1100,6 +1161,29 @@ function kill(e,idx){
 
 function parts(x,y,col,n){ const m=PART_MULT[(S.prefs&&S.prefs.particules)||'normal']||1; n=Math.max(1,Math.round(n*m)); for(let i=0;i<n;i++) G.particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:12+Math.random()*14,color:col}); }
 function spawnExplosion(x,y,ampleur){ const v=ampleur||18; G.explosions.push({x,y,life:v, maxLife:v}); }
+
+/* Teinte le sprite de munition a la couleur du vaisseau. Sans ca, tous les
+   vaisseaux tiraient exactement le meme projectile des que le palier 45 est
+   debloque : la signature visuelle de chaque appareil disparaissait.
+   Le resultat est mis en cache par couleur, on ne repeint pas a chaque image. */
+const _munTeintes={};
+function munTeintee(img, couleur){
+  const cle=String(couleur);
+  if(_munTeintes[cle]) return _munTeintes[cle];
+  try{
+    const c=document.createElement('canvas');
+    c.width=img.width||128; c.height=img.height||128;
+    const x=c.getContext('2d');
+    if(!x || !x.drawImage || !x.fillRect) return img;
+    x.drawImage(img,0,0,c.width,c.height);
+    x.globalCompositeOperation='source-atop';   /* n'affecte que les pixels du sprite */
+    x.globalAlpha=0.55;
+    x.fillStyle=couleur;
+    x.fillRect(0,0,c.width,c.height);
+    _munTeintes[cle]=c;
+    return c;
+  }catch(e){ return img; }
+}
 
 function draw(){
   const g=G, ctx=g.ctx;
@@ -1222,13 +1306,24 @@ function draw(){
   const tir = TIRS[loadout.ship] || TIRS[0];
   /* Palier 45 : munition signature. On remplace le rendu vectoriel par un
      sprite dedie. Meme degats, meme cadence : seul le visuel change. */
-  const munSig = debloque('munition') ? (ASSETS.projJoueur2 || ASSETS.projJoueur1) : null;
+  /* La demo est la vitrine du hangar : elle doit montrer les 14 signatures
+     de tir. La munition du palier 45, elle, est identique pour tous — on la
+     met de cote le temps du trailer. */
+  const enDemo = !!(g && g.demo);
+  const munSig = (debloque('munition') && !enDemo) ? (ASSETS.projJoueur2 || ASSETS.projJoueur1) : null;
   if(munSig){
+    /* Le sprite est dessine couche, pointe vers la DROITE, dans un carre de
+       128 px. Il etait affiche tel quel dans un carre de 22 px : projectile
+       a l'horizontale et ecrase. On le redresse d'un quart de tour et on
+       respecte ses proportions. */
+    const sprite = munTeintee(munSig, tir.c);
+    const LONG=30, LARG=13;
     g.bullets.forEach(b=>{
-      const t=22;
       ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(-Math.PI/2);
       ctx.shadowColor=tir.c; ctx.shadowBlur=tir.glow;
-      ctx.drawImage(munSig, b.x-t/2, b.y-t/2, t, t);
+      ctx.drawImage(sprite, -LONG/2, -LARG/2, LONG, LARG);
       ctx.restore();
     });
   } else
@@ -1648,9 +1743,10 @@ function renderShips(){
           '<button onclick="unlockShip('+sh.id+',\'sol\')" class="btn flex-1 py-2 rounded-xl text-[10.5px] font-bold"'+
             (S.sol<(sh.sol||0)?' style="opacity:.5"':'')+'>'+(sh.sol||0)+' SOL</button>'+
           '<button onclick="unlockShip('+sh.id+',\'skr\')" class="glass flex-1 py-2 rounded-xl text-[10.5px] font-bold" '+
+            'title="'+(skrIndisponible()?T('Disponible au lancement mainnet'):'')+'" '+
             'style="border-color:rgba(20,241,149,.5);color:#14F195'+
-            ((S.soldeSkr||0)<(sh.skr||0)?';opacity:.5':'')+'">'+
-            (sh.skr||0).toLocaleString()+' SKR</button>'+
+            ((skrIndisponible() || (S.soldeSkr||0)<(sh.skr||0))?';opacity:.45':'')+'">'+
+            (sh.skr||0).toLocaleString()+' SKR'+(skrIndisponible()?'<br><span style="font-size:8px;color:#7c7a8c;font-weight:500">'+T('mainnet')+'</span>':'')+'</button>'+
         '</div>'
       : sel
         ? '<div class="mt-2 py-2 text-[11px] font-bold text-green-400">\u2713 \u00c9QUIP\u00c9</div>'
@@ -1674,10 +1770,15 @@ function equiperVaisseau(id){
    signe par le joueur. Retourne la signature, ou null si rien n'est parti. */
 async function payerEnSKR(montant, etiquette){
   if(!S.walletReel || !S.addressComplete){ CHAINE.derniereErreur='wallet non connecte'; return null; }
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
   if(CHAINE.enCours){ CHAINE.derniereErreur='transaction deja en cours'; return null; }
-  const w3=await chargerWeb3(); if(!w3){ CHAINE.derniereErreur='web3.js indisponible'; return null; }
-  const spl=await chargerSPL(); if(!spl){ CHAINE.derniereErreur='module SPL indisponible'; return null; }
   CHAINE.enCours=true;
+  const w3=await chargerWeb3();
+  if(!w3){ CHAINE.enCours=false; CHAINE.derniereErreur='web3.js indisponible'; return null; }
+  const spl=await chargerSPL();
+  if(!spl){ CHAINE.enCours=false; CHAINE.derniereErreur='module SPL indisponible'; return null; }
   try{
     const { PublicKey, Transaction, TransactionInstruction } = w3;
     const joueur  = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
@@ -1703,7 +1804,7 @@ async function payerEnSKR(montant, etiquette){
              : new TextEncoder().encode('seeker-strike:'+etiquette)
     }));
 
-    const { blockhash } = await CHAINE.connexion.getLatestBlockhash();
+    const blockhash = await blockhashFrais();
     const tx = new Transaction({ feePayer:joueur, recentBlockhash:blockhash });
     instrs.forEach(i=>tx.add(i));
     const sig = await signerEtEnvoyer(tx);
@@ -1715,7 +1816,8 @@ async function payerEnSKR(montant, etiquette){
     }
     return sig||null;
   }catch(e){
-    CHAINE.derniereErreur=(e&&(e.message||e.toString()))||'erreur inconnue';
+    CHAINE.derniereErreur=causeLisible(e)||'erreur inconnue';
+    if(/blockhash not found|block height exceeded/i.test(String((e&&(e.message||e))||''))) invaliderBlockhash();
     LOG.warn('[SEEKER] paiement SKR refuse : '+CHAINE.derniereErreur);
     return null;
   }finally{ CHAINE.enCours=false; }
@@ -1725,15 +1827,18 @@ async function payerEnSKR(montant, etiquette){
 async function donnerSOL(montant){
   if(!S.connected) return toast('Connecte ton wallet d\'abord', 2400);
   if(!S.walletReel) return toast('Le don demande un vrai wallet', 2600);
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
   if(CHAINE.enCours) return toast('Transaction en cours…');
-  const w3=await chargerWeb3();
-  if(!w3) return toast('❌ web3.js indisponible', 3000);
   CHAINE.enCours=true;
   try{
+    const w3=await chargerWeb3();
+    if(!w3) return toast('❌ web3.js indisponible', 3000);
     const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
     const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
     const tx = new Transaction({ feePayer:joueur,
-      recentBlockhash:(await CHAINE.connexion.getLatestBlockhash()).blockhash });
+      recentBlockhash: await blockhashFrais() });
     tx.add(SystemProgram.transfer({ fromPubkey:joueur,
       toPubkey:new PublicKey(DONS.adresse), lamports:Math.round(montant*1e9) }));
     tx.add(new TransactionInstruction({
@@ -1769,6 +1874,7 @@ async function donnerSOL(montant){
 async function donnerSKR(montant){
   if(!S.connected) return toast('Connecte ton wallet d\'abord', 2400);
   if(!S.walletReel) return toast('Le don demande un vrai wallet', 2600);
+  if(skrIndisponible()) return toast(T('Paiement SKR disponible au lancement mainnet · utilise le SOL sur devnet'), 4200);
   const solde=await lireSoldeSKR();
   if(solde<montant) return toast('Il te manque '+(montant-solde).toLocaleString()+' SKR', 3000);
   toast('✍️ Signe le don de '+montant.toLocaleString()+' SKR…', 3000);
@@ -1824,8 +1930,10 @@ function renderPanneauDons(){
     '<div class="text-[9.5px] mb-1.5" style="color:#7c7a8c">'+T('Don en SKR')+'</div>'+
     '<div style="display:flex;gap:6px">'+
       DONS.skr.map(v=>'<button onclick="donnerSKR('+v+')" class="glass flex-1 py-2 rounded-xl '+
-        'text-[10.5px] font-bold" style="border-color:rgba(20,241,149,.45);color:#14F195">'+
-        v.toLocaleString()+'</button>').join('')+
+        'text-[10.5px] font-bold" style="border-color:rgba(20,241,149,.45);color:#14F195'+
+        (skrIndisponible()?';opacity:.45':'')+'">'+v.toLocaleString()+'</button>').join('')+
+      (skrIndisponible()?'<div class="text-[9px] mt-1.5" style="color:#7c7a8c">'+
+        T('SKR disponible au lancement mainnet')+'</div>':'')+
     '</div>'+
     (((S.donsSol||0)>0 || (S.donsSkr||0)>0)
       ? '<div class="text-[10px] mt-3" style="color:#14F195">'+
@@ -1853,6 +1961,7 @@ async function unlockShip(id, monnaie){
     if(!prix) return toast('Ce vaisseau ne s\u2019ach\u00e8te pas en SKR', 2400);
     if(!S.connected) return toast('Connecte ton wallet pour payer en SKR', 2600);
     if(!S.walletReel) return toast('Le paiement SKR demande un vrai wallet', 2800);
+    if(skrIndisponible()) return toast(T('Paiement SKR disponible au lancement mainnet · utilise le SOL sur devnet'), 4200);
     const solde = await lireSoldeSKR();
     if(solde < prix) return toast('Il te manque '+(prix-solde).toLocaleString()+' SKR', 3000);
     toast('\u270d\ufe0f Signe le transfert de '+prix.toLocaleString()+' SKR\u2026', 3000);
@@ -1888,8 +1997,17 @@ async function unlockShip(id, monnaie){
    2. un shoot'em up vertical n'a pas de sens en paysage : le terrain
       devient trop court. Les menus, eux, restent utilisables.
    ============================================================ */
+/* Hauteur au-dela de laquelle il reste assez de terrain vertical pour jouer,
+   meme en paysage. Un telephone couche tombe vers 390-430 px ; une tablette
+   ou un portable restent au-dessus de 600. */
+const HAUTEUR_JOUABLE = 560;
 function estPaysage(){
-  return (window.innerWidth||0) > (window.innerHeight||0) * 1.15;
+  const l=window.innerWidth||0, h=window.innerHeight||0;
+  /* Le vrai critere n'est pas « large », c'est « pas assez haut pour un
+     shoot'em up vertical ». Se fier au seul rapport largeur/hauteur bloquait
+     les portables a ecran tactile, et l'emulateur des outils de developpement
+     des qu'on refermait la console. */
+  return l > h * 1.15 && h <= HAUTEUR_JOUABLE;
 }
 
 /* Reajuste la surface de jeu sans perdre la partie en cours */
@@ -1929,8 +2047,17 @@ function verrouillerPortrait(){
 /* Android n'accorde le verrouillage d'orientation qu'en plein ecran, et
    seulement a la suite d'un geste de l'utilisateur. On tente donc a chaque
    premier appui tant que le verrou n'est pas obtenu. */
+let _essaisPleinEcran=0;
 function tenterVerrouillageComplet(){
   if(_portraitVerrouille) return;
+  /* Tous les navigateurs ne savent pas verrouiller l'orientation. Sans
+     plafond, on redemandait le plein ecran a chaque appui et la console se
+     remplissait de refus. Trois tentatives suffisent : si ca n'a pas pris,
+     ca ne prendra pas, et le voile de rotation fait deja le travail. */
+  if(_essaisPleinEcran>=3) return;
+  const o = (typeof screen!=='undefined') && (screen.orientation || screen.msOrientation);
+  if(!o || !o.lock){ _essaisPleinEcran=3; return; }   /* inutile d'insister */
+  _essaisPleinEcran++;
   verrouillerPortrait();
   try{
     const d=document.documentElement;
