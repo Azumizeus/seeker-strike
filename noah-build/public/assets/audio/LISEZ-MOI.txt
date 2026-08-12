@@ -1,0 +1,24 @@
+Dépose ici les fichiers audio, en .mp3, avec exactement ces noms :
+
+MUSIQUE (bouclée automatiquement)
+  menu_theme.mp3      ambiance calme, écrans d'UI
+  combat_theme.mp3    rythme soutenu, missions
+  boss_theme.mp3      tension, nœuds 4 / 6 / 7
+
+SFX
+  shoot.mp3           tir du joueur
+  enemy_shoot.mp3     tir ennemi (joué 1 fois sur 9 pour éviter la bouillie)
+  hit.mp3             dégât reçu par le joueur
+  enemy_die.mp3       explosion d'un ennemi
+  boss_die.mp3        grosse explosion / nuke
+  pickup.mp3          collecte d'orbe, bonus
+  levelup.mp3         amélioration
+  button_click.mp3    UI
+  wave_start.mp3      début de vague
+  victory.mp3         nœud complété
+  defeat.mp3          game over
+
+Aucun fichier n'est obligatoire : ce qui manque retombe automatiquement
+sur la synthèse WebAudio d'origine. Le jeu ne casse jamais.
+
+Volumes par défaut : musique 0.45, SFX 0.65 (modifiables dans Audio2).

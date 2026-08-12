@@ -1,0 +1,22 @@
+# Bruit systeme
+.DS_Store
+Thumbs.db
+
+# Dependances reinstallables (26 Mo, npm install les remet)
+tests/node_modules/
+
+# Sources originales, utiles en local seulement (330 Mo)
+_backup/
+
+# Archives : elles se regenerent depuis les builds
+*.zip
+ziBRgzZL
+
+# Vestiges d'anciennes versions
+game/index.html
+game/index_backup_v36.html
+game/assets_opt/
+
+# Fichiers temporaires
+*.tmp
+docs/_test.*

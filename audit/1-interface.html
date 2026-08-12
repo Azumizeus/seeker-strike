@@ -1,0 +1,1101 @@
+<!-- SEEKER STRIKE v4.2 - PARTIE 1/6 : interface (HTML + CSS)
+     Le script est decoupe dans les fichiers 2 a 6.
+     Images base64 retirees : 86% du poids, aucun interet ici. -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#05050a"/>
+<meta name="description" content="Seeker Strike — Genesis Protocol : shoot'em up spatial pour Solana Seeker."/>
+<meta property="og:title" content="Seeker Strike — Genesis Protocol"/>
+<meta property="og:description" content="Shoot'em up spatial mobile-first pour Solana Seeker."/>
+<link rel="icon" type="image/png" href="data:image/png;base64,/*[IMAGE 7 Ko retiree pour l'audit]*/"/>
+<link rel="apple-touch-icon" href="assets/inline/icone180.png"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<!-- Verrouillage portrait : ces trois metas sont lues par les WebViews Android
+     (AOSP, X5/UC) qui ignorent screen.orientation.lock(). -->
+<meta name="screen-orientation" content="portrait"/>
+<meta name="x5-orientation" content="portrait"/>
+<meta name="full-screen" content="yes"/>
+<link rel="manifest" href="data:application/manifest+json;base64,/*[IMAGE 0 Ko retiree pour l'audit]*/"/>
+<title>Seeker Strike • Genesis Protocol v4.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--p:#9945FF;--g:#14F195;--bg:#05050a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:#fff !important;font-family:'Inter',system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+/* Le defilement vertical reste possible sur les ecrans de contenu ;
+   seul le canvas de jeu capte l'integralite des gestes. */
+.screen{touch-action:pan-y}
+.screen.game{touch-action:none}
+body{background:radial-gradient(ellipse at 20% 0%,rgba(153,69,255,.22) 0%,transparent 50%),radial-gradient(ellipse at 90% 100%,rgba(20,241,149,.1) 0%,transparent 45%),#05050a}
+button,a{color:#fff;font-family:inherit}
+.font-o{font-family:'Orbitron',sans-serif}
+.glass{background:rgba(14,14,26,.95) !important;backdrop-filter:blur(18px);border:1px solid rgba(153,69,255,.3);box-shadow:0 8px 28px rgba(0,0,0,.45);color:#fff !important}
+.btn{background:linear-gradient(135deg,#9945FF,#7c3aed 45%,#14F195) !important;box-shadow:0 4px 20px rgba(153,69,255,.45);transition:transform .2s;border:none !important;color:#fff !important;cursor:pointer;font-weight:700}
+.btn:active{transform:scale(.96)}
+button.glass{color:#fff !important;background:rgba(14,14,26,.95) !important}
+.screen button{color:#fff !important}
+#air-badge{color:#000 !important}
+#s-map{padding:0 !important;overflow:hidden !important}
+#s-map.active{display:block !important}
+#map-nodes-visual{position:absolute;inset:0;z-index:10;pointer-events:auto}
+.screen{display:none;height:100dvh;min-height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Zone tampon sous le dernier bloc.
+   Deux pieges cumules :
+   1. le padding-bottom d'un conteneur scrollable est ignore par WebKit
+      quand le contenu vit dans un enfant -> il faut une vraie hauteur ;
+   2. env(safe-area-inset-bottom) vaut 0 dans la WebView du Seeker alors
+      que la barre de gestes Android occupe bien l'espace -> valeur fixe
+      genereuse, l'env ne fait que s'ajouter sur les appareils qui le declarent. */
+/* ===== Reserve de bas de page =====
+   La barre d'onglets flotte au-dessus du contenu (position:fixed, 66 px),
+   et la barre de gestes Android en occupe encore une cinquantaine par-dessus.
+   Trois pieges se cumulaient :
+     1. le padding-bottom pose sur le conteneur scrollable lui-meme est
+        ignore par WebKit quand le contenu vit dans un enfant ;
+     2. env(safe-area-inset-bottom) vaut 0 dans la WebView du Seeker ;
+     3. un spacer injecte en JS peut ne jamais etre pose.
+   La reserve porte donc sur l'ENFANT DIRECT, en CSS pur, valeur fixe. */
+.screen:not(.game) > div{
+  padding-bottom:calc(170px + env(safe-area-inset-bottom,0px));
+}
+/* L'ecran de campagne gere lui-meme sa hauteur : la reserve y creait une
+   grande bande noire entre le bas de la carte et la barre d'onglets. */
+#s-map > div{ padding-bottom:0 }
+/* les couches decoratives en position absolue n'ont rien a reserver */
+.screen:not(.game) > div#poussiere,
+.screen:not(.game) > div[style*="position:absolute"]{ padding-bottom:0 }
+
+.fin-page{display:block;width:100%;flex:none;pointer-events:none;height:8px}
+.screen.active{display:block}
+.screen.game{padding-bottom:0;overflow:hidden}
+.nav{position:fixed;bottom:0;left:0;right:0;height:66px;background:rgba(6,6,14,.97);backdrop-filter:blur(20px);border-top:1px solid rgba(153,69,255,.3);display:flex;justify-content:space-around;align-items:center;z-index:80;padding-bottom:env(safe-area-inset-bottom)}
+.nav.hide{display:none}
+/* Accessibilite : focus clavier visible */
+:focus-visible{outline:2px solid #14F195;outline-offset:2px;border-radius:8px}
+button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #14F195;outline-offset:3px}
+/* Confort : animations decoratives coupees si l'utilisateur le demande */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+  #splash .fond,.jeu-fond.couche2{animation:none}
+  #poussiere{display:none}
+}
+.nav-i{display:flex;flex-direction:column;align-items:center;gap:1px;color:#9ca3af;font-size:9px;font-weight:600;padding:4px 6px;background:none;border:none;cursor:pointer}
+.nav-i.active{color:#14F195}
+.nav-i svg{width:20px;height:20px}
+/* Boutons retour : SVG plutot que la fleche unicode, qui ne rend pas sur certains WebView */
+.screen button svg{vertical-align:middle}
+.screen>div>div>button:first-child{min-width:34px;min-height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:rgba(255,255,255,.05)}
+/* Icones Recraft : l'etat actif passe par l'opacite et le glow */
+.nav-i img{width:22px;height:22px;object-fit:contain;opacity:.42;transition:opacity .2s,filter .2s}
+.nav-i.active img{opacity:1;filter:drop-shadow(0 0 6px rgba(20,241,149,.85))}
+.ico-stat{width:14px;height:14px;object-fit:contain;vertical-align:-2px;opacity:.9;
+  filter:drop-shadow(0 0 4px rgba(153,69,255,.5))}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-120px);background:rgba(12,12,24,.97);border:1px solid #14F195;padding:10px 16px;border-radius:14px;z-index:300;transition:transform .3s;max-width:92%;text-align:center;font-size:12px;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar>div{height:100%;border-radius:3px;background:linear-gradient(90deg,#9945FF,#14F195);transition:width .35s}
+#gc{display:block;width:100%;height:100%;touch-action:none;background:transparent}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:none;align-items:center;justify-content:center;padding:14px}
+/* Les contenus longs des modals doivent defiler au doigt */
+.modal .overflow-y-auto{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+
+/* ===== En-tetes de section, communs aux ecrans ===== */
+.sect{display:flex;align-items:center;gap:9px;margin:22px 0 11px}
+.sect:first-child{margin-top:6px}
+.sect .lig{flex:1;height:1px;background:linear-gradient(90deg,rgba(153,69,255,.45),transparent)}
+.sect span{font-size:9.5px;font-weight:800;letter-spacing:2.5px;color:#9ca3af;white-space:nowrap}
+
+/* ===== Voile de rotation ===== */
+/* Palier 90 : theme Genesis. Palier 100 : accents dores. */
+.hud-genesis .solde{border-color:rgba(251,191,36,.35);background:rgba(40,30,6,.35)}
+.hud-genesis .sect span{color:#fbbf24}
+.hud-genesis .bar>div{background:linear-gradient(90deg,#fbbf24,#9945FF)}
+.rang-validateur .solde u{color:#fbbf24}
+/* Palier 150 : la carte prend les couleurs Genesis. */
+.rang-architecte #s-map .fond-carte, .rang-architecte #s-map canvas{
+  filter:hue-rotate(-18deg) saturate(1.25) brightness(1.06)}
+.rang-architecte #badge-validateur{
+  background:linear-gradient(135deg,#c4b5fd,#fbbf24)}
+#badge-validateur{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  font-size:9px;font-weight:800;letter-spacing:1px;color:#1a1405;
+  background:linear-gradient(135deg,#fbbf24,#fde68a);box-shadow:0 0 14px rgba(251,191,36,.45)}
+#badge-validateur.hidden{display:none}
+
+/* Choix de la langue : premier ecran apres l'accueil, une seule fois. */
+#choix-langue{position:fixed;inset:0;z-index:600;display:none;align-items:center;justify-content:center;
+  padding:26px;background:rgba(4,3,10,.96);backdrop-filter:blur(7px)}
+#choix-langue.on{display:flex}
+#choix-langue .boite{width:100%;max-width:330px;text-align:center}
+#choix-langue .marque{width:74px;height:74px;margin:0 auto 18px;border-radius:22px;
+  background-size:contain;background-repeat:no-repeat;background-position:center}
+#choix-langue .tt{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:800;letter-spacing:2px;
+  background:linear-gradient(90deg,#9945FF,#14F195);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent}
+#choix-langue .tt2{font-family:'Orbitron',sans-serif;font-size:10.5px;letter-spacing:2px;color:#6b7280;
+  margin-top:5px;margin-bottom:22px}
+#choix-langue .lg{width:100%;padding:15px 18px;margin-bottom:11px;border-radius:16px;
+  border:1px solid rgba(153,69,255,.4);background:rgba(255,255,255,.05);color:#fff;
+  text-align:left;cursor:pointer;display:block}
+#choix-langue .lg b{display:block;font-family:'Orbitron',sans-serif;font-size:14px;font-weight:800}
+#choix-langue .lg span{display:block;font-size:10.5px;color:#8b8b9e;margin-top:3px}
+#choix-langue .pied{font-size:9.5px;color:#5b5b6e;line-height:1.7;margin-top:14px}
+
+/* Terminal de bord de la carte (easter egg DEVNET).
+   Replie : un onglet vertical colle a gauche, la carte reste entiere.
+   Deploye : un panneau de 214px. Le contenu vit dans un enfant de largeur
+   fixe : sans ca il se remettait en page pendant l'animation et donnait
+   l'impression de s'ouvrir plus grand avant de se retracter. */
+/* Ancre a la fenetre, pas au contenu : la carte defile, le terminal reste.
+   En absolu dans #map-scroll il disparaissait des qu'on descendait, et on ne
+   le trouvait qu'en remontant tout en haut. Centre verticalement, colle a
+   gauche : toujours sous le pouce, jamais sur la carte. */
+#terminal-carte{position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:45;display:flex;align-items:stretch;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none}
+#terminal-carte.hidden{display:none}
+#term-onglet{pointer-events:auto;flex:none;width:24px;padding:13px 0;cursor:pointer;
+  border:1px solid rgba(20,241,149,.45);border-left:none;border-radius:0 10px 10px 0;
+  background:linear-gradient(180deg,rgba(24,10,48,.95),rgba(4,16,12,.95));
+  color:#14F195;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 16px rgba(153,69,255,.28);transition:box-shadow .2s}
+#term-onglet .pt{writing-mode:vertical-rl;text-orientation:mixed;font-size:8px;letter-spacing:2.5px;
+  font-weight:700;background:linear-gradient(180deg,#9945FF,#14F195);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#terminal-carte.ouvert #term-onglet{border-radius:0;box-shadow:0 0 22px rgba(20,241,149,.35)}
+/* Seule la largeur s'anime ; la boite interieure garde toujours ses 214px. */
+#term-corps{pointer-events:auto;width:0;overflow:hidden;transition:width .24s cubic-bezier(.22,.9,.3,1);
+  border-radius:0 13px 13px 0}
+#terminal-carte.ouvert #term-corps{width:214px}
+#term-int{width:214px;box-sizing:border-box;padding:12px 13px;
+  max-height:calc(100dvh - 190px);overflow-y:auto;
+  border:1px solid rgba(153,69,255,.4);border-left:none;border-radius:0 13px 13px 0;
+  background:linear-gradient(160deg,rgba(20,8,42,.96),rgba(4,14,11,.97));
+  box-shadow:inset 0 0 26px rgba(153,69,255,.14)}
+#term-int .tl{font-size:8.5px;letter-spacing:2px;margin-bottom:9px;font-weight:700;
+  background:linear-gradient(90deg,#9945FF,#14F195);-webkit-background-clip:text;
+  background-clip:text;-webkit-text-fill-color:transparent}
+#term-int .li{display:flex;justify-content:space-between;gap:8px;font-size:9px;line-height:2;
+  border-bottom:1px solid rgba(153,69,255,.13)}
+#term-int .li b{color:#7d7595;font-weight:500}
+#term-int .li span{color:#d7e3dd;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#term-int .nd{font-size:8.5px;color:#14F195;margin:11px 0 5px;letter-spacing:2px;font-weight:700}
+#term-int .inc{color:#5f5a72;font-style:italic}
+#term-int .act{margin-top:11px;padding:7px 9px;border-radius:9px;font-size:8.5px;line-height:1.6;
+  color:#c4b5fd;background:rgba(153,69,255,.14);border:1px solid rgba(153,69,255,.34)}
+
+#voile-rotation{position:fixed;inset:0;z-index:9999;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;
+  background:rgba(4,3,10,.97);backdrop-filter:blur(6px);text-align:center}
+#voile-rotation.on{display:flex}
+#voile-rotation .tel{width:58px;height:92px;border-radius:11px;border:2.5px solid #c4b5fd;
+  position:relative;animation:pivote 2.4s ease-in-out infinite}
+#voile-rotation .tel::after{content:'';position:absolute;left:50%;bottom:6px;transform:translateX(-50%);
+  width:18px;height:2.5px;border-radius:2px;background:#c4b5fd}
+@keyframes pivote{0%,18%{transform:rotate(-90deg)}55%,100%{transform:rotate(0deg)}}
+#voile-rotation b{font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:2px;color:#c4b5fd}
+#voile-rotation span{font-size:11.5px;color:#8b8b9e;line-height:1.65;max-width:280px}
+
+/* ===== Accueil ===== */
+.hero{position:relative;border-radius:22px;overflow:hidden;margin-bottom:14px;
+  border:1px solid rgba(153,69,255,.3);
+  background:linear-gradient(145deg,rgba(46,20,84,.55),rgba(10,8,22,.75))}
+.hero .voile{position:absolute;inset:0;
+  background:radial-gradient(120% 90% at 82% 8%,rgba(20,241,149,.16),transparent 55%)}
+.hero .dedans{position:relative;padding:16px 17px}
+.hero .marque{display:flex;align-items:center;gap:11px;margin-bottom:15px}
+.hero .pastille{width:46px;height:46px;border-radius:14px;flex:none;display:flex;overflow:hidden;cursor:pointer;
+  align-items:center;justify-content:center;font-weight:800;font-size:15px;
+  background:linear-gradient(135deg,#9945FF,#14F195);color:#fff;
+  box-shadow:0 0 20px rgba(153,69,255,.5)}
+.hero h1{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:800;letter-spacing:.6px;
+  text-shadow:0 0 14px rgba(153,69,255,.75);line-height:1.15}
+.hero .ver{font-size:8.5px;color:#7c7a8c;letter-spacing:1.6px;margin-top:2px}
+
+.soldes{display:flex;gap:10px}
+.solde{flex:1;border-radius:15px;padding:11px 13px;background:rgba(0,0,0,.32);
+  border:1px solid rgba(255,255,255,.07)}
+.solde u{display:block;font-size:8.5px;color:#6b7280;text-decoration:none;letter-spacing:1.3px}
+.solde b{display:block;font-family:'Orbitron',sans-serif;font-size:15px;margin-top:3px;font-weight:800}
+.soldes .solde{padding:10px 9px}
+.solde u{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Tuiles de navigation */
+.tuile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:7px;
+  padding:14px 14px 13px;border-radius:17px;text-align:left;
+  background:rgba(255,255,255,.035);border:1px solid rgba(153,69,255,.2)}
+.tuile .rond{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;
+  justify-content:center;background:rgba(153,69,255,.16)}
+.tuile .rond img{width:20px;height:20px;object-fit:contain}
+.tuile b{font-size:12.5px;font-weight:700;letter-spacing:.3px}
+.tuile small{font-size:9.5px;color:#8b8b9e;line-height:1.4}
+.tuile:active{transform:scale(.975)}
+.tuile.large{flex-direction:row;align-items:center;gap:13px}
+.tuile.vedette{border-color:rgba(20,241,149,.45);
+  background:linear-gradient(135deg,rgba(20,241,149,.13),rgba(153,69,255,.1))}
+.tuile.vedette .rond{background:rgba(20,241,149,.2)}
+.tuile.danger{border-color:rgba(248,113,113,.4)}
+.tuile.danger .rond{background:rgba(248,113,113,.16)}
+
+/* ===== Arena : cartes de mode ===== */
+.mode-carte{position:relative;border-radius:18px;overflow:hidden;margin-bottom:13px;
+  border:1px solid rgba(153,69,255,.28);background:rgba(255,255,255,.035)}
+.mode-carte .bandeau{display:flex;align-items:center;gap:11px;padding:15px 16px 12px}
+.mode-carte .rond{width:44px;height:44px;border-radius:14px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:rgba(153,69,255,.18)}
+.mode-carte .rond img{width:26px;height:26px;object-fit:contain}
+.mode-carte .nom{font-family:'Orbitron',sans-serif;font-size:12.5px;font-weight:800;letter-spacing:1.2px}
+.mode-carte .sous{font-size:10.5px;color:#9ca3af;margin-top:3px;line-height:1.5}
+.mode-carte .stats{display:flex;gap:8px;padding:0 16px 13px}
+.mode-carte .stat{flex:1;text-align:center;padding:8px 4px;border-radius:11px;
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06)}
+.mode-carte .stat u{display:block;font-size:8.5px;color:#6b7280;text-decoration:none;letter-spacing:.8px}
+.mode-carte .stat b{display:block;font-size:13px;margin-top:2px}
+.mode-carte .action{padding:0 16px 16px}
+.mode-carte.coop{border-color:rgba(20,241,149,.35)}
+.mode-carte.coop .rond{background:rgba(20,241,149,.14)}
+
+/* ===== Reglages : une carte par option ===== */
+.opt{display:flex;align-items:center;gap:13px;padding:14px 15px;border-radius:16px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(153,69,255,.18);margin-bottom:10px}
+.opt .pict{width:38px;height:38px;border-radius:12px;flex:none;display:flex;align-items:center;
+  justify-content:center;background:rgba(153,69,255,.16)}
+.opt .pict img{width:21px;height:21px;object-fit:contain}
+.opt .txt{flex:1;min-width:0}
+.opt .txt b{display:block;font-size:13px;font-weight:700;letter-spacing:.2px}
+.opt .txt small{display:block;font-size:10px;color:#8b8b9e;margin-top:2px;line-height:1.45}
+.opt.colonne{flex-direction:column;align-items:stretch;gap:11px}
+.opt.colonne .haut{display:flex;align-items:center;gap:13px}
+
+/* ===== Zone danger ===== */
+.danger-carte{border-radius:16px;border:1px solid rgba(239,68,68,.3);
+  background:linear-gradient(180deg,rgba(40,10,14,.55),rgba(24,8,12,.35));padding:15px;margin-bottom:10px}
+.danger-carte .t{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.danger-carte .t b{font-size:13px}
+.danger-carte p{font-size:10.5px;color:#9ca3af;line-height:1.55;margin-bottom:11px}
+
+/* ===== Selecteur de carte ===== */
+
+/* ===== Regles : sections depliables ===== */
+.regle{border:1px solid rgba(153,69,255,.22);border-radius:14px;margin-bottom:9px;overflow:hidden;
+  background:rgba(255,255,255,.03);transition:border-color .2s}
+.regle.ouvert{border-color:rgba(20,241,149,.45);background:rgba(20,241,149,.05)}
+.regle>button{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;text-align:left;
+  background:none;border:0;color:#fff}
+.regle .puce{width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:15px;background:rgba(153,69,255,.18)}
+.regle .titre{flex:1;font-size:12.5px;font-weight:700;letter-spacing:.3px}
+.regle .chev{font-size:11px;color:#9ca3af;transition:transform .25s}
+.regle.ouvert .chev{transform:rotate(90deg);color:#14F195}
+.regle .corps{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.regle.ouvert .corps{max-height:640px}
+.regle .corps>div{padding:0 14px 14px 54px;font-size:11.5px;line-height:1.75;color:#c9c6d6}
+.regle .corps b{color:#fff}
+.modal.show{display:flex}
+.modal.cf{z-index:400}
+.node{transition:all .2s}
+.node.available{border-color:rgba(20,241,149,.5)}
+.node.completed{border-color:rgba(153,69,255,.4);opacity:.85}
+.node.locked{opacity:.4;pointer-events:none}
+/* --- Reglages : toggles, segments, zone danger --- */
+.tgl{width:46px;height:26px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(153,69,255,.3);position:relative;transition:background .2s;flex:none;cursor:pointer}
+.tgl.on{background:linear-gradient(135deg,#9945FF,#14F195);border-color:rgba(20,241,149,.6)}
+.tgl>i{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;display:block}
+.tgl.on>i{transform:translateX(20px)}
+.seg{display:flex;gap:6px}
+.seg>button{flex:1;padding:7px 0;border-radius:10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);border:1px solid rgba(153,69,255,.22);color:#9ca3af}
+.seg>button.on{background:linear-gradient(135deg,rgba(153,69,255,.5),rgba(20,241,149,.4));color:#fff;border-color:rgba(20,241,149,.6)}
+.danger{border:1px solid rgba(239,68,68,.35);background:rgba(30,8,8,.6)}
+.btn-warn{background:linear-gradient(135deg,#f59e0b,#f97316)}
+.btn-danger{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+.btn-dark{background:rgba(10,10,16,.95);border:1px solid #ef4444;color:#fca5a5}
+.btn-warn:active,.btn-danger:active,.btn-dark:active{transform:scale(.96)}
+/* --- Fonds d'ecran (v3.9) : embarques en base64, aucun fichier externe requis.
+   Overlay violet unifiant sur l'UI, jamais sur le gameplay. --- */
+.screen{position:relative;background:none}
+.screen::before{content:'';position:fixed;top:0;left:0;z-index:0;pointer-events:none;
+  width:100vw;height:100vh;height:100lvh;            /* lvh : insensible a la barre d'URL mobile */
+  background-image:var(--fond,none);background-size:cover;background-position:center center;
+  background-repeat:no-repeat;
+  filter:saturate(1.22) brightness(1.05);}
+.screen::after{content:'';position:fixed;top:0;left:0;z-index:0;pointer-events:none;
+  width:100vw;height:100vh;height:100lvh;
+  background:rgba(20,10,40,.30);}
+.screen:not(.game)>*{position:relative;z-index:1}
+/* En jeu, le HUD garde son positionnement absolu : on remonte juste sa couche */
+.screen.game>.absolute{z-index:20}
+.screen.game::before,.screen.game::after{display:none}   /* le jeu garde son propre decor */
+#s-home    {--fond:var(--bg-home)}
+#s-prep    {--fond:var(--bg-prep)}
+#s-shop    {--fond:var(--bg-shop)}
+#s-quests  {--fond:var(--bg-quests)}
+#s-settings{--fond:var(--bg-settings)}
+#s-multi   {--fond:var(--bg-multi)}
+#s-ships   {--fond:var(--bg-ships)}
+#s-map     {--fond:none}
+:root{
+  --bg-home:    url('data:image/jpeg;base64,/*[IMAGE 34 Ko retiree pour l'audit]*/');
+  --bg-prep:    url('data:image/jpeg;base64,/*[IMAGE 47 Ko retiree pour l'audit]*/');
+  --bg-shop:    url('data:image/jpeg;base64,/*[IMAGE 36 Ko retiree pour l'audit]*/');
+  --bg-quests:  url('data:image/jpeg;base64,/*[IMAGE 63 Ko retiree pour l'audit]*/');
+  --bg-settings:url('data:image/jpeg;base64,/*[IMAGE 27 Ko retiree pour l'audit]*/');
+  --bg-multi:   url('data:image/jpeg;base64,/*[IMAGE 34 Ko retiree pour l'audit]*/');
+  --bg-ships:   url('data:image/jpeg;base64,/*[IMAGE 59 Ko retiree pour l'audit]*/');
+}
+/* --- Fond de jeu : CSS compose par le GPU + canvas transparent au-dessus --- */
+#s-solo{position:relative;background:#030308}
+.jeu-fond{position:absolute;left:0;right:0;top:-6%;height:112%;z-index:0;pointer-events:none;
+  background:url('data:image/jpeg;base64,/*[IMAGE 54 Ko retiree pour l'audit]*/') center/cover no-repeat;opacity:.60}
+.jeu-fond.couche2{opacity:.28;animation:derive 26s linear infinite}
+@keyframes derive{from{transform:translate3d(0,-6%,0)}to{transform:translate3d(0,6%,0)}}
+#gc{position:relative;z-index:1}
+
+/* ============================================================
+   RESPIRATION — les textes ne touchent plus les bords
+   ============================================================ */
+.screen .px-4{padding-left:18px;padding-right:18px}
+.glass.rounded-2xl{border-radius:18px}
+.screen{line-height:1.5}   /* le bas de page est gere par le spacer ci-dessus */
+.text-\[10px\],.text-\[11px\]{line-height:1.55!important}
+.text-\[12px\],.text-\[13px\]{line-height:1.6!important}
+.font-semibold,.font-bold{letter-spacing:.2px}
+/* Aucun mot ne deborde de sa carte */
+.screen div,.screen span,.screen p,.screen button{overflow-wrap:anywhere;word-break:normal}
+.screen .font-o.font-bold{letter-spacing:1.5px}
+/* Listes plus aerees */
+.space-y-2\.5>*+*{margin-top:12px!important}
+.space-y-3>*+*{margin-top:14px!important}
+.space-y-1\.5>*+*{margin-top:8px!important}
+.bar{height:7px;border-radius:4px}
+.screen button{min-height:36px}
+.nav-i{min-height:auto}
+
+/* ===== Barre de bonus : 3 boutons toujours accessibles ===== */
+/* Barre de bonus : detachee du bas de l'ecran pour rester atteignable
+   au-dessus de la barre de gestes Android et de la safe-area. */
+/* Hauteur de la bande des boosts, reprise par le moteur pour interdire au
+   vaisseau d'y descendre : sans ca les boutons se retrouvaient pile a
+   l'altitude de vol et se declenchaient par accident. */
+:root{ --h-boosts:74px; }
+#barre-bonus{display:flex;gap:9px;position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:22;pointer-events:auto}
+.bonus-btn{width:58px;height:58px;border-radius:16px;position:relative;
+  background:rgba(10,8,22,.8);border:1px solid rgba(153,69,255,.4);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;
+  transition:transform .15s,opacity .2s}
+.bonus-btn img{width:26px;height:26px;object-fit:contain}
+.bonus-btn .nb{font-size:9px;font-weight:800;color:#14F195;line-height:1}
+.bonus-btn.vide{opacity:.3;border-color:rgba(255,255,255,.12)}
+.bonus-btn.vide .nb{color:#6b7280}
+.bonus-btn:active{transform:scale(.9)}
+.glass[data-off]{opacity:.4}
+.bonus-btn.pret{border-color:rgba(20,241,149,.75);box-shadow:0 0 14px rgba(20,241,149,.35)}
+
+/* ===== Titre de secteur, facon chapitre ===== */
+#titre-secteur{position:absolute;inset:0;z-index:35;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:0 24px}
+#titre-secteur .num{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:6px;
+  color:#14F195;opacity:0;animation:chapNum .7s ease .1s forwards}
+#titre-secteur .nom{font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:clamp(24px,8vw,40px);letter-spacing:1px;margin-top:8px;color:#fff;
+  text-shadow:0 0 26px rgba(153,69,255,.9);opacity:0;
+  animation:chapNom .9s cubic-bezier(.2,.9,.3,1) .35s forwards}
+#titre-secteur .trait{width:0;height:2px;margin-top:14px;
+  background:linear-gradient(90deg,transparent,#14F195,transparent);
+  animation:chapTrait 1s ease .7s forwards}
+#titre-secteur.sortie{animation:chapSortie .7s ease forwards}
+@keyframes chapNum{from{opacity:0;letter-spacing:14px}to{opacity:1;letter-spacing:6px}}
+@keyframes chapNom{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes chapTrait{to{width:190px}}
+@keyframes chapSortie{to{opacity:0}}
+
+/* ===== Fin cinematique ===== */
+#final{position:fixed;inset:0;z-index:520;display:none;background:#04040a;
+  align-items:center;justify-content:center;padding:28px;text-align:center}
+#final.on{display:flex}
+#final .bloc{max-width:360px}
+#final .lig{opacity:0;font-size:14px;line-height:1.9;color:#e5e3ee;margin-bottom:14px;
+  animation:finLigne 1.5s ease forwards}
+#final .fin{font-family:'Orbitron',sans-serif;font-size:26px;letter-spacing:5px;
+  background:linear-gradient(135deg,#c4b5fd,#14F195);-webkit-background-clip:text;
+  background-clip:text;color:transparent;opacity:0;animation:finLigne 2s ease forwards}
+@keyframes finLigne{to{opacity:1}}
+
+/* ===== Menu pause en jeu ===== */
+#btn-pause{position:absolute;top:6px;left:42px;z-index:40;
+  height:30px;padding:0 11px;border-radius:10px;
+  background:rgba(10,8,22,.82);backdrop-filter:blur(6px);
+  border:1px solid rgba(20,241,149,.45);color:#14F195;
+  font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;
+  display:flex;align-items:center;gap:5px;line-height:1}
+#btn-pause:active{transform:scale(.94)}
+#btn-pause b{display:inline-block;width:3px;height:11px;background:#14F195;border-radius:1px}
+#btn-pause b+b{margin-left:-2px}
+#pause{position:fixed;inset:0;z-index:450;display:none;align-items:center;justify-content:center;
+  background:rgba(3,3,10,.9);padding:20px}
+#pause.on{display:flex}
+#pause .bloc{width:100%;max-width:320px}
+#pause .ligne{display:flex;justify-content:space-between;align-items:center;padding:11px 0}
+#pause .ligne+.ligne{border-top:1px solid rgba(255,255,255,.06)}
+
+/* ===== SPLASH : logo, Ken Burns, appel a l'action ===== */
+#splash{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;background:#05050a;overflow:hidden;transition:opacity .5s ease}
+#splash.parti{opacity:0;pointer-events:none}
+#splash .fond{position:absolute;left:-8%;right:-8%;top:-8%;height:116%;background:var(--bg-home);background-size:cover;
+  background-position:center;animation:kenburns 22s ease-in-out infinite alternate}
+@keyframes kenburns{from{transform:scale(1) translate3d(0,0,0)}to{transform:scale(1.16) translate3d(0,-2%,0)}}
+#splash .contenu{position:relative;z-index:2;text-align:center;padding:0 24px}
+#splash .titre{font-family:'Orbitron',sans-serif;font-weight:800;font-size:clamp(30px,10vw,54px);
+  letter-spacing:2px;line-height:1.05;
+  background:linear-gradient(135deg,#c4b5fd 0%,#fff 40%,#14F195 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 22px rgba(153,69,255,.75));
+  opacity:0;animation:apparait 1.1s ease .25s forwards}
+#splash .sous{font-size:10px;letter-spacing:5px;color:#8b8b9e;margin-top:10px;
+  opacity:0;animation:apparait .9s ease .9s forwards}
+#splash .cta{position:absolute;bottom:12%;left:0;right:0;text-align:center;font-size:12px;
+  font-weight:700;letter-spacing:3px;color:#14F195;opacity:0;
+  animation:apparait .8s ease 1.5s forwards, respire 2.1s ease-in-out 2.3s infinite}
+@keyframes apparait{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes respire{0%,100%{opacity:.45}50%{opacity:1}}
+
+/* ===== Tuto premiere visite ===== */
+#tuto{position:fixed;inset:0;z-index:520;display:none;align-items:center;justify-content:center;
+  background:rgba(3,3,10,.93);padding:20px}
+#tuto.on{display:flex}
+#tuto .carte{max-width:340px;width:100%;text-align:center}
+#tuto .pict{font-size:52px;margin-bottom:14px}
+#tuto .pts{display:flex;gap:6px;justify-content:center;margin:16px 0}
+#tuto .pts i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);display:block}
+#tuto .pts i.on{background:#14F195;box-shadow:0 0 8px #14F195}
+
+/* ===== Transitions entre ecrans : fade + slide ===== */
+.screen.active{animation:entreeEcran .3s cubic-bezier(.22,.9,.3,1)}
+@keyframes entreeEcran{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.screen.game.active{animation:entreeJeu .32s ease}
+@keyframes entreeJeu{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+
+/* ===== Poussiere d'etoiles sur l'accueil ===== */
+#poussiere{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+#poussiere span{position:absolute;display:block;border-radius:50%;background:#c4b5fd;
+  opacity:.5;animation:flotte linear infinite}
+@keyframes flotte{from{transform:translate3d(0,110%,0)}to{transform:translate3d(0,-15%,0)}}
+#s-home>div{position:relative;z-index:1}
+
+/* ===== Minimal utility set (replaces Tailwind CDN) ===== */
+.flex{display:flex}.grid{display:grid}.hidden{display:none}.block{display:block}
+.relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
+.inset-0{top:0;right:0;bottom:0;left:0}
+.top-0{top:0}.bottom-0{bottom:0}.left-0{left:0}.right-0{right:0}
+.left-1\/2{left:50%}.-bottom-5{bottom:-1.25rem}
+.z-10{z-index:10}.z-20{z-index:20}
+.w-full{width:100%}.h-full{height:100%}.w-6{width:1.5rem}.w-8{width:2rem}.w-10{width:2.5rem}.w-16{width:4rem}
+.h-10{height:2.5rem}
+.min-w-\[72px\]{min-width:72px}
+.max-w-sm{max-width:24rem}.max-w-md{max-width:28rem}.max-h-\[80vh\]{max-height:80vh}
+.object-cover{object-fit:cover}.object-contain{object-fit:contain}
+.items-center{align-items:center}.items-start{align-items:flex-start}.items-end{align-items:flex-end}
+.justify-between{justify-content:space-between}.justify-center{justify-content:center}
+.flex-col{flex-direction:column}
+.gap-2{gap:.5rem}.gap-2\.5{gap:.625rem}
+.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.overflow-hidden{overflow:hidden}
+.px-2{padding-left:.5rem;padding-right:.5rem}.px-2\.5{padding-left:.625rem;padding-right:.625rem}
+.px-3{padding-left:.75rem;padding-right:.75rem}.px-3\.5{padding-left:.875rem;padding-right:.875rem}
+.px-4{padding-left:1rem;padding-right:1rem}.px-7{padding-left:1.75rem;padding-right:1.75rem}
+.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}
+.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}
+.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}
+.py-3\.5{padding-top:.875rem;padding-bottom:.875rem}
+.pt-2{padding-top:.5rem}.pt-3{padding-top:.75rem}.pt-4{padding-top:1rem}
+.pb-1{padding-bottom:.25rem}.pb-2{padding-bottom:.5rem}.pb-3{padding-bottom:.75rem}.pb-4{padding-bottom:1rem}
+.mb-1{margin-bottom:.25rem}.mb-1\.5{margin-bottom:.375rem}.mb-2{margin-bottom:.5rem}
+.mb-2\.5{margin-bottom:.625rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}
+.mt-0\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}.mt-1\.5{margin-top:.375rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}
+.space-y-1\.5>*+*{margin-top:.375rem}.space-y-2>*+*{margin-top:.5rem}.space-y-2\.5>*+*{margin-top:.625rem}.space-y-3>*+*{margin-top:.75rem}
+.text-center{text-align:center}.text-left{text-align:left}.text-right{text-align:right}
+.whitespace-nowrap{white-space:nowrap}.leading-snug{line-height:1.375}.leading-relaxed{line-height:1.625}
+.font-bold{font-weight:700}.font-semibold{font-weight:600}
+.text-\[9px\]{font-size:9px}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[12px\]{font-size:12px}
+.text-xs{font-size:.75rem}.text-sm{font-size:.875rem}.text-lg{font-size:1.125rem}.text-2xl{font-size:1.5rem}.text-3xl{font-size:1.875rem}
+.text-\[15px\]{font-size:15px}.text-\[16px\]{font-size:16px}
+.text-gray-300{color:#d1d5db}.text-gray-400{color:#9ca3af}.text-gray-500{color:#6b7280}
+.text-white{color:#fff}.text-white\/80{color:rgba(255,255,255,.8)}.text-white\/90{color:rgba(255,255,255,.9)}
+.text-purple-300{color:#d8b4fe}.text-green-300{color:#86efac}.text-green-400{color:#4ade80}
+.text-red-300{color:#fca5a5}.text-black{color:#000}
+.bg-black\/40{background:rgba(0,0,0,.4)}.bg-black\/50{background:rgba(0,0,0,.5)}.bg-black\/60{background:rgba(0,0,0,.6)}
+.bg-gradient-to-br{background-image:linear-gradient(to bottom right,var(--tw-g1,#9945FF),var(--tw-g2,#14F195))}
+.bg-gradient-to-r{background-image:linear-gradient(to right,var(--tw-g1,#4ade80),var(--tw-g2,#9945FF))}
+.bg-gradient-to-t{background-image:linear-gradient(to top,var(--tw-g1,rgba(0,0,0,.8)),var(--tw-g2,transparent))}
+.from-purple-500{--tw-g1:#a855f7}.to-green-400{--tw-g2:#4ade80}
+.from-green-400{--tw-g1:#4ade80}.to-purple-500{--tw-g2:#a855f7}
+.from-black\/80{--tw-g1:rgba(0,0,0,.8)}.to-transparent{--tw-g2:transparent}
+.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-2xl{border-radius:1rem}.rounded-3xl{border-radius:1.5rem}.rounded-full{border-radius:9999px}
+.border{border:1px solid}.border-l-4{border-left:4px solid}.border-green-400{border-color:#4ade80}.border-green-500\/40{border-color:rgba(34,197,94,.4)}
+.ring-2{box-shadow:0 0 0 2px}.ring-green-400{box-shadow:0 0 0 2px #4ade80}
+.opacity-40{opacity:.4}.opacity-35{opacity:.35}.opacity-100{opacity:1}
+.grayscale{filter:grayscale(1)}.drop-shadow{filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}.drop-shadow-lg{filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
+.backdrop-blur{backdrop-filter:blur(12px)}
+.transform{-webkit-transform:translateX(var(--tx,0)) translateY(var(--ty,0));transform:translateX(var(--tx,0)) translateY(var(--ty,0))}
+.-translate-x-1\/2{--tx:-50%}.-translate-y-1\/2{--ty:-50%}
+.transition-all{transition:all .3s}.duration-300{transition-duration:.3s}
+.animate-pulse{animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.tracking-wider{letter-spacing:.05em}
+.cursor-pointer{cursor:pointer}
+.pointer-events-none{pointer-events:none}.pointer-events-auto{pointer-events:auto}
+.underline{text-decoration:underline}
+.w-full{width:100%}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- ===== ECRAN DE DEMARRAGE ===== -->
+<div id="splash" onclick="quitterSplash()">
+  <div class="fond"></div>
+  <div class="contenu">
+    <div class="titre">SEEKER<br>STRIKE</div>
+    <div class="sous">GENESIS PROTOCOL</div>
+  </div>
+  <div class="cta">APPUYER POUR COMMENCER</div>
+</div>
+
+<!-- ===== CHOIX DE LA LANGUE — premiere ouverture uniquement ===== -->
+<div id="choix-langue" aria-hidden="true">
+  <div class="boite">
+    <div class="marque"></div>
+    <div class="tt">CHOISIS TA LANGUE</div>
+    <div class="tt2">CHOOSE YOUR LANGUAGE</div>
+    <button onclick="choisirLangueDepart('fr')" class="lg">
+      <b>Fran&ccedil;ais</b><span>Continuer en fran&ccedil;ais</span>
+    </button>
+    <button onclick="choisirLangueDepart('en')" class="lg">
+      <b>English</b><span>Continue in English</span>
+    </button>
+    <div class="pied">Modifiable &agrave; tout moment dans les r&eacute;glages<br>Changeable anytime in settings</div>
+  </div>
+</div>
+
+<!-- ===== TUTO PREMIERE VISITE ===== -->
+<div id="tuto">
+  <div class="carte glass rounded-3xl p-6">
+    <div class="pict" id="tuto-pict">\ud83d\udd79\ufe0f</div>
+    <div class="font-o font-bold text-base mb-2" id="tuto-titre">SE D\u00c9PLACER</div>
+    <div class="text-[12px] text-gray-300 leading-relaxed" id="tuto-texte">Glisse ton doigt n'importe o\u00f9 sur l'\u00e9cran : le vaisseau te suit dans toutes les directions. Au clavier : ZQSD ou les fl\u00e8ches.</div>
+    <div class="pts" id="tuto-pts"></div>
+    <button onclick="tutoSuivant()" class="btn w-full py-3 rounded-xl font-bold text-sm" id="tuto-btn">SUIVANT</button>
+    <button onclick="fermerTuto()" class="text-[11px] text-gray-500 mt-3">Passer</button>
+  </div>
+</div>
+
+<div id="voile-rotation" aria-hidden="true">
+  <div class="tel"></div>
+  <b>TOURNE TON T&Eacute;L&Eacute;PHONE</b>
+  <span>Seeker Strike se joue en mode portrait : le terrain vertical fait tout le gameplay. La partie reprend d&egrave;s que tu reviens.</span>
+</div>
+
+<div id="s-home" class="screen active"><div id="poussiere"></div>
+  <!-- CODE ORBITAL : quatre zones invisibles aux coins, sens horaire depuis le haut-gauche -->
+  <div onclick="coinTape(0)" style="position:absolute;top:0;left:0;width:46px;height:46px;z-index:40;opacity:0"></div>
+  <div onclick="coinTape(1)" style="position:absolute;top:0;right:0;width:46px;height:46px;z-index:40;opacity:0"></div>
+  <div onclick="coinTape(2)" style="position:absolute;bottom:0;right:0;width:46px;height:46px;z-index:40;opacity:0"></div>
+  <div onclick="coinTape(3)" style="position:absolute;bottom:0;left:0;width:46px;height:46px;z-index:40;opacity:0"></div>
+  <div class="px-4 pt-4 pb-2">
+
+    <!-- ===== Bandeau d'identite + soldes ===== -->
+    <div class="hero">
+      <i class="voile"></i>
+      <div class="dedans">
+        <div class="marque">
+          <div id="logo" class="pastille" title="Seeker Nexus"></div>
+          <div style="flex:1;min-width:0">
+            <h1>SEEKER STRIKE</h1>
+            <div class="ver">GENESIS PROTOCOL v4.2 &bull; <span style="color:#fbbf24">DEVNET</span></div>
+          </div>
+          <button onclick="show('settings')" aria-label="R&eacute;glages" class="glass w-9 h-9 rounded-xl flex items-center justify-center" style="flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="#c4b5fd"><path d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.07-1.58zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg></button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span id="badge-validateur" class="hidden">&#9889; VALIDATEUR</span></div>
+        <button onclick="toggleWallet()" class="glass w-full rounded-xl mb-3" style="padding:9px 12px;font-size:11.5px;font-weight:600;text-align:left"><span id="w-status">&#128279; Connecter le wallet</span></button>
+        <div class="soldes">
+          <div class="solde"><u>SOL &bull; TON WALLET</u><b class="text-purple-300" id="b-sol">0.00</b></div>
+          <div class="solde"><u>SKR &bull; TON WALLET</u><b class="text-green-300" id="b-skrtok">0</b></div>
+          <div class="solde"><u>GC &bull; CR&Eacute;DITS</u><b class="text-emerald-200" id="b-skr">0</b></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Missions ===== -->
+    <div class="sect"><span>MISSIONS</span><i class="lig"></i></div>
+
+    <button onclick="show('map')" class="tuile large vedette w-full">
+      <div class="rond"><span id="ico-carte"></span></div>
+      <div style="flex:1;min-width:0">
+        <b style="color:#14F195">CARTE DE CAMPAGNE</b>
+        <small id="home-progression">22 secteurs &bull; 7 boss</small>
+      </div>
+      <span style="color:#14F195;font-size:16px">&#9656;</span>
+    </button>
+
+    <div class="grid grid-cols-2 gap-2.5 mt-2.5">
+      <button onclick="lancerInfini()" class="tuile danger">
+        <div class="rond">&#9854;&#65039;</div>
+        <b>INFINI</b>
+        <small id="home-infini">Tiens le plus longtemps</small>
+      </button>
+      <button onclick="show('multi')" class="tuile">
+        <div class="rond"><span id="ico-arena"></span></div>
+        <b>ARENA</b>
+        <small>D&eacute;fi du jour &amp; coop</small>
+      </button>
+    </div>
+
+    <!-- ===== Progression ===== -->
+    <div class="sect"><span>PROGRESSION</span><i class="lig"></i></div>
+
+    <div class="opt" style="margin-bottom:10px">
+      <div class="pict"><span id="ico-streak"></span></div>
+      <div class="txt" style="flex:1;min-width:0">
+        <b>Connexion quotidienne</b>
+        <small><span id="streak">0</span> jour(s) d&rsquo;affil&eacute;e</small>
+      </div>
+      <button onclick="claimDaily()" id="btn-daily" class="btn rounded-xl text-[11px] font-bold" style="padding:7px 14px;flex:none">CLAIM</button>
+    </div>
+
+    <div class="opt colonne" style="border-color:rgba(20,241,149,.28)">
+      <div style="display:flex;align-items:flex-start;gap:13px">
+        <div class="pict" style="background:rgba(20,241,149,.16)">&#9939;</div>
+        <div class="txt" style="flex:1;min-width:0">
+          <b>Seeker Task &bull; <span id="tx">0</span>/15</b>
+          <small id="task-etat">Wallet non connect&eacute;</small>
+        </div>
+        <div id="air-badge" class="hidden px-2 py-0.5 rounded-full text-[9px] font-bold bg-gradient-to-r from-green-400 to-purple-500 text-black" style="flex:none;align-self:center">&#9989; &Eacute;LIGIBLE</div>
+      </div>
+      <div class="bar"><div id="tx-bar" style="width:0%"></div></div>
+      <button onclick="envoyerSeekerTask()" id="btn-task" class="btn w-full py-2 rounded-xl text-[11px] font-bold" style="background:linear-gradient(135deg,#0891b2,#14F195)">ENVOYER 1 TX</button>
+      <div style="font-size:9.5px;color:#7c7a8c;line-height:1.5;margin-top:-2px">Les 15 m&eacute;mos partent group&eacute;s dans <b>une seule transaction</b> Solana devnet : tu ne signes qu&rsquo;une fois. Relan&ccedil;able quand tu veux. Un soutien de 0.001 SOL est inclus &mdash; le gameplay, lui, reste 100% GC.</div>
+    </div>
+
+    <!-- ===== Base ===== -->
+    <div class="sect"><span>BASE</span><i class="lig"></i></div>
+
+    <div class="grid grid-cols-2 gap-2.5">
+      <button onclick="show('shop')" class="tuile">
+        <div class="rond"><span id="ico-shop"></span></div>
+        <b>ARMORY</b><small>Am&eacute;liorations &amp; consommables</small>
+      </button>
+      <button onclick="show('ships')" class="tuile">
+        <div class="rond"><span id="ico-ships"></span></div>
+        <b>HANGAR</b><small id="home-ships">12 vaisseaux</small>
+      </button>
+    </div>
+    <div class="grid grid-cols-2 gap-2.5 mt-2.5">
+      <button onclick="show('quests')" class="tuile">
+        <div class="rond"><span id="ico-quetes"></span></div>
+        <b>QU&Ecirc;TES</b><small id="home-quetes">Objectifs &amp; secrets</small>
+      </button>
+      <button onclick="show('bestiaire')" class="tuile">
+        <div class="rond"><span id="ico-best"></span></div>
+        <b>BESTIAIRE</b><small>Fiches ennemis &amp; boss</small>
+      </button>
+    </div>
+    <button onclick="showRules()" class="tuile large w-full mt-2.5">
+      <div class="rond"><span id="ico-regles"></span></div>
+      <div style="flex:1;min-width:0"><b>R&Egrave;GLES DU JEU</b><small>Commandes, syst&egrave;mes, &eacute;conomie</small></div>
+      <span style="color:#8b8b9e;font-size:15px">&#9656;</span>
+    </button>
+
+    <div class="glass rounded-xl p-2.5 mt-3 text-[10.5px] flex justify-between items-center" id="ligne-infini" style="display:none">
+      <span class="text-gray-400">&#9854;&#65039; Record infini</span>
+      <span class="font-bold text-red-300" id="infini-record">&mdash;</span>
+    </div>
+    <div class="rounded-xl mt-3" id="story-line" style="padding:11px 13px;font-size:10.5px;color:#b9b6c8;line-height:1.6;background:rgba(20,241,149,.05);border-left:3px solid #14F195">
+      <span class="text-green-400 font-semibold">TRANSMISSION :</span> Le r&eacute;seau Genesis attend tes ordres, pilote.
+    </div>
+  </div>
+</div></div>
+</div>
+
+<div id="s-map" class="screen" style="padding:0; overflow:hidden;">
+  <!-- Terminal de bord : hors du conteneur qui defile, sinon il sortait de
+       l'ecran des qu'on descendait sur la carte. Debloque par l'easter egg DEVNET. -->
+  <div id="terminal-carte" class="hidden" aria-hidden="true">
+    <button id="term-onglet" onclick="basculerTerminalCarte()" aria-label="Terminal de bord">
+      <span class="pt">T E R M I N A L</span>
+    </button>
+    <div id="term-corps"><div id="term-int"></div></div>
+  </div>
+  <div id="map-scroll" style="height:calc(100dvh - 66px - env(safe-area-inset-bottom));overflow-y:auto;overflow-x:hidden;background:#05050a;-webkit-overflow-scrolling:touch;">
+    <div class="relative w-full" id="map-inner" style="height:150%;min-height:calc(100dvh - 66px);">
+    <img id="map-bg" src="" class="absolute inset-0 w-full h-full" alt="Campaign Map" style="background:#05050a; object-fit:cover; object-position:center top;"/>
+    <div class="absolute top-0 left-0 right-0 z-20 px-3 pt-3 flex justify-between items-center">
+      <button onclick="show('home')" class="text-sm text-white/80 bg-black/40 backdrop-blur px-3 py-1.5 rounded-xl">← Home</button>
+      <div class="font-o font-bold text-sm text-purple-300 drop-shadow">CARTE GENESIS</div>
+      <button onclick="basculerCampagne()" id="btn-campagne" aria-label="Changer de campagne"
+        style="position:absolute;left:12px;top:44px;z-index:40;background:rgba(10,8,22,.85);
+        border:1px solid rgba(244,114,182,.5);border-radius:10px;padding:6px 11px;font-size:10px;
+        letter-spacing:1px;color:#f9a8d4;display:none">CHAOS &#9654;</button>
+      <div class="w-16"></div>
+      <div class="w-16"></div>
+    </div>
+    <!-- Visual nodes overlay -->
+    <div id="map-nodes-visual" class="absolute inset-0 z-10"></div>
+    <!-- Fallback list (hidden on visual) -->
+    <div id="map-nodes" class="hidden"></div>
+  </div>
+</div>
+</div>
+
+<div id="s-prep" class="screen">
+  <div class="px-4 pt-3 pb-4">
+    <div class="flex justify-between items-center mb-3">
+      <button onclick="show('map')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg><span style="margin-left:4px">Carte</span></button>
+      <div class="font-o font-bold text-sm text-green-300" id="prep-title">PRÉPARATION</div>
+      <div class="w-8"></div>
+    </div>
+    <div class="glass rounded-xl p-3 mb-3 text-[11px] text-gray-300 leading-snug" id="prep-brief">Briefing...</div>
+    <div class="mb-3">
+      <div class="text-[10px] text-gray-500 mb-1.5 font-semibold">MODE</div>
+      <div class="grid grid-cols-2 gap-2" id="mode-grid"></div>
+    </div>
+    <div class="mb-3">
+      <div class="text-[10px] text-gray-500 mb-1.5 font-semibold">VAISSEAU</div>
+      <div class="flex gap-2 overflow-x-auto pb-1" id="prep-ships"></div>
+    </div>
+    <div class="mb-3">
+      <div class="text-[10px] text-gray-500 mb-1.5 font-semibold">MUNITIONS</div>
+      <div class="grid grid-cols-2 gap-2" id="prep-munitions"></div>
+    </div>
+    <div class="mb-4">
+      <div class="text-[10px] text-gray-500 mb-1.5 font-semibold">CHARGES <span style="color:#6b7280">&mdash; utilisables en pleine partie</span></div>
+      <div id="prep-cap-boosts" class="text-[10px] mb-1.5" style="color:#fbbf24;letter-spacing:.4px"></div>
+      <div class="space-y-2" id="prep-bonuses"></div>
+    </div>
+    <button onclick="launchMission()" class="w-full btn rounded-2xl py-3.5 font-o font-bold text-sm"><span id="ico-lancer"></span> LANCER LA MISSION</button>
+  </div>
+</div>
+
+<div id="s-solo" class="screen game">
+  <div class="absolute top-0 left-0 right-0 z-20 px-3 pt-2 flex justify-between items-start pointer-events-none">
+    <div class="pointer-events-auto"><button onclick="abortMission()" class="text-xs text-gray-400 bg-black/50 px-2 py-1 rounded-lg">✕</button></div>
+    <div class="text-center" style="margin-top:34px">
+      <div class="font-o text-[11px] text-green-300" id="hud-title">MISSION</div>
+      <div class="text-[10px] text-gray-400"><span id="hud-wave">1</span> • <span id="hud-mode">Pilote</span></div>
+      <div id="hud-contrat" class="text-[10px] mt-1" style="display:none;letter-spacing:.6px"></div>
+    </div>
+    <div class="text-right text-[11px] font-semibold">
+      <div>❤️ <span id="hud-lives">3</span></div>
+      <div class="text-green-300"><span id="hud-score">0</span></div>
+    </div>
+  </div>
+  <button id="btn-pause" onclick="basculerPause()" aria-label="Pause"><b></b><b></b> PAUSE</button>
+  <div class="jeu-fond"></div>
+  <div class="jeu-fond couche2"></div>
+  <canvas id="gc"></canvas>
+  <div id="barre-bonus">
+    <button class="bonus-btn" onclick="activerBonus('mitra')"  id="bb-mitra"><span class="nb">0</span></button>
+    <button class="bonus-btn" onclick="activerBonus('nuke')"   id="bb-nuke"><span class="nb">0</span></button>
+    <button class="bonus-btn" onclick="activerBonus('ghost')"  id="bb-ghost"><span class="nb">0</span></button>
+  </div>
+  <div class="absolute bottom-0 left-0 right-0 z-20 px-3 pt-2 bg-gradient-to-t from-black/80 to-transparent" style="padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))">
+    <div class="flex justify-between items-end">
+      <div class="text-[10px]">
+        <div>Combo <span id="hud-combo" class="text-purple-300 font-bold">x1</span></div>
+        <div>Frags <span id="hud-frags" class="text-purple-300">0</span></div>
+      </div>
+      <div class="text-[10px] text-right">
+        <div id="hud-ship">🚀</div>
+        <div id="hud-pwr" class="text-green-300">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-result" class="modal">
+  <div class="glass rounded-3xl p-5 w-full max-w-sm text-center">
+    <div class="text-3xl mb-2" id="res-icon">💥</div>
+    <div class="font-o font-bold text-lg mb-1" id="res-title">Mission Failed</div>
+    <div class="text-xs text-gray-400 mb-3" id="res-sub"></div>
+    <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+      <div class="glass rounded-xl p-2"><div class="text-[9px] text-gray-500">Score</div><div class="font-bold" id="res-score">0</div></div>
+      <div class="glass rounded-xl p-2"><div class="text-[9px] text-gray-500">Kills</div><div class="font-bold" id="res-kills">0</div></div>
+      <div class="glass rounded-xl p-2"><div class="text-[9px] text-gray-500">Frags</div><div class="font-bold text-purple-300" id="res-frags">0</div></div>
+      <div class="glass rounded-xl p-2"><div class="text-[9px] text-gray-500">Wave</div><div class="font-bold" id="res-wave">1</div></div>
+    </div>
+    <div class="text-sm text-green-300 mb-4" id="res-reward"></div>
+    <button onclick="closeResult()" class="btn w-full py-3 rounded-xl font-bold">CONTINUER</button>
+  </div>
+</div>
+
+<div id="s-multi" class="screen">
+  <div class="px-4 pt-4">
+    <div class="flex justify-between items-center mb-4">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-purple-300">ARENA</div>
+      <div class="w-6"></div>
+    </div>
+
+    <div class="sect"><span>D&Eacute;FI DU JOUR</span><i class="lig"></i></div>
+
+    <div class="mode-carte">
+      <div class="bandeau">
+        <div class="rond"><span id="ico-defi"></span></div>
+        <div style="min-width:0">
+          <div class="nom" id="ar-nom" style="color:#c4b5fd">&nbsp;</div>
+          <div class="sous" id="arena-desc">&nbsp;</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><u>DUR&Eacute;E</u><b id="ar-duree">60s</b></div>
+        <div class="stat"><u>RECORD</u><b class="text-green-300" id="ar-record">&mdash;</b></div>
+        <div class="stat"><u>BONUS</u><b class="text-purple-300" id="ar-gain">&times;1.5</b></div>
+      </div>
+      <div class="action">
+        <button onclick="lancerArena()" class="btn w-full py-3 rounded-xl font-bold text-sm">LANCER LE D&Eacute;FI</button>
+      </div>
+    </div>
+
+    <div class="sect"><span>COOP&Eacute;RATION</span><i class="lig"></i></div>
+
+    <div class="mode-carte coop">
+      <div class="bandeau">
+        <div class="rond"><span id="ico-coop"></span></div>
+        <div style="min-width:0">
+          <div class="nom" style="color:#14F195">ARENA COOP</div>
+          <div class="sous">Un wingman IA combat &agrave; tes c&ocirc;t&eacute;s. Il tire, il encaisse, il compte ses kills.</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><u>ALLI&Eacute;</u><b class="text-cyan-300">1</b></div>
+        <div class="stat"><u>RESPAWN</u><b>5s</b></div>
+        <div class="stat"><u>VICTOIRE</u><b class="text-green-300">+180</b></div>
+      </div>
+      <div class="action">
+        <button onclick="lancerCoop()" class="btn w-full py-3 rounded-xl font-bold text-sm" style="background:linear-gradient(135deg,#0891b2,#14F195)">D&Eacute;PLOYER LE WINGMAN</button>
+      </div>
+    </div>
+
+    <div class="sect"><span>TES RECORDS</span><i class="lig"></i></div>
+    <div class="glass rounded-2xl" style="padding:15px 16px">
+      <div id="lb" class="space-y-1.5 text-[12px]"></div>
+    </div>
+  </div>
+</div>
+
+<div id="s-shop" class="screen">
+  <div class="px-4 pt-4">
+    <div class="flex justify-between items-center mb-4">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-green-300">ARMORY</div>
+      <div class="w-6"></div>
+    </div>
+    <div class="space-y-2.5" id="shop-list"></div>
+  </div>
+</div>
+
+<div id="s-ships" class="screen">
+  <div class="px-4 pt-4">
+    <div class="flex justify-between items-center mb-4">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-purple-300">SHIPS</div>
+      <div class="w-6"></div>
+    </div>
+    <div class="grid grid-cols-2 gap-2.5" id="ship-grid"></div>
+  </div>
+</div>
+
+<div id="s-quests" class="screen">
+  <div class="px-4 pt-4">
+    <div class="flex justify-between items-center mb-4">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-green-300">QUÊTES</div>
+      <div class="w-6"></div>
+    </div>
+    <div class="space-y-2.5" id="quest-list"></div>
+    <div class="sect" style="margin-top:26px"><span>CL&Eacute;S</span><i class="lig"></i></div>
+    <div class="space-y-2.5" id="cles-liste"></div>
+    <div class="sect" style="margin-top:26px"><span>SECRETS &mdash; <b id="secrets-compteur" style="color:#fbbf24">0/4</b></span><i class="lig"></i></div>
+    <div class="space-y-2.5" id="secrets-liste"></div>
+    <div class="text-[10px] text-gray-600 mt-3 mb-2 text-center" style="line-height:1.6">Les secrets non trouv&eacute;s n&rsquo;affichent qu&rsquo;un indice.</div>
+  </div>
+</div>
+
+<!-- ===== MENU PAUSE ===== -->
+<div id="pause">
+  <div class="bloc glass rounded-3xl p-5">
+    <div class="font-o font-bold text-center text-purple-300 mb-1">PAUSE</div>
+    <div class="text-[10px] text-gray-500 text-center mb-3" id="pause-info">&nbsp;</div>
+
+    <div class="ligne">
+      <div><div class="font-semibold text-sm flex items-center gap-2"><span class="ico-son"></span>Son</div><div class="text-[10px] text-gray-500">Effets et musique</div></div>
+      <div id="p-son" class="tgl" onclick="togglePrefPause('son')"><i></i></div>
+    </div>
+    <div class="ligne">
+      <div><div class="font-semibold text-sm flex items-center gap-2"><span class="ico-musique"></span>Musique</div><div class="text-[10px] text-gray-500">Ambiance</div></div>
+      <div id="p-musique" class="tgl" onclick="togglePrefPause('musique')"><i></i></div>
+    </div>
+    <div class="ligne">
+      <div><div class="font-semibold text-sm">&#128244; Vibrations</div><div class="text-[10px] text-gray-500">Retour haptique</div></div>
+      <div id="p-vibration" class="tgl" onclick="togglePrefPause('vibration')"><i></i></div>
+    </div>
+    <div class="ligne">
+      <div class="w-full">
+        <div class="font-semibold text-sm mb-2">&#10024; Particules</div>
+        <div class="seg" id="p-particules">
+          <button data-v="faible" onclick="setParticulesPause('faible')">Faible</button>
+          <button data-v="normal" onclick="setParticulesPause('normal')">Normal</button>
+          <button data-v="eleve" onclick="setParticulesPause('eleve')">&Eacute;lev&eacute;</button>
+        </div>
+      </div>
+    </div>
+
+    <button onclick="reprendrePartie()" class="btn w-full py-3 rounded-xl font-bold text-sm mt-4">REPRENDRE</button>
+    <button onclick="quitterPartie()" class="btn-danger w-full py-2.5 rounded-xl font-bold text-[12px] mt-2">ABANDONNER LA MISSION</button>
+  </div>
+</div>
+
+<!-- ===== FIN CINEMATIQUE ===== -->
+<div id="final">
+  <div class="bloc" id="final-bloc"></div>
+</div>
+
+<div id="modal-rules" class="modal">
+  <div class="glass rounded-3xl p-5 max-w-md w-full max-h-[84vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-o font-bold text-purple-300">GENESIS PROTOCOL</h2>
+      <button onclick="closeRules()" class="text-xl text-gray-500" aria-label="Fermer">&times;</button>
+    </div>
+    <div id="regles-liste"></div>
+    <div class="text-[10px] text-gray-600 text-center mt-3">Appuie sur une section pour la d&eacute;plier</div>
+  </div>
+</div>
+
+<div id="s-bestiaire" class="screen">
+  <div class="px-4 pt-4 pb-6">
+    <div class="flex justify-between items-center mb-3">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-purple-300">BESTIAIRE</div>
+      <div class="w-6"></div>
+    </div>
+    <p class="text-[11px] text-gray-400 mb-4 text-center">Chaque unit&eacute; a un comportement. Apprends-les, ils ne changent jamais d'avis.</p>
+    <div id="best-filtres" style="display:flex;gap:6px;margin-bottom:13px"></div>
+    <div id="bestiaire-liste" class="space-y-2.5"></div>
+  </div>
+</div>
+
+<!-- ===== ECRAN PARAMETRES ===== -->
+<div id="s-settings" class="screen">
+  <div class="px-4 pt-4 pb-6">
+    <div class="flex justify-between items-center mb-4">
+      <button onclick="show('home')" class="text-sm text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="font-o font-bold text-purple-300">R&Eacute;GLAGES</div>
+      <div class="w-6"></div>
+    </div>
+
+    <div class="sect"><span>LANGUE</span><i class="lig"></i></div>
+      <div class="opt">
+        <div class="pict">&#127760;</div>
+        <div class="txt" style="flex:1;min-width:0">
+          <b>Langue du jeu</b>
+          <small>Interface, briefings, bestiaire et r&egrave;gles</small>
+        </div>
+        <div style="display:flex;gap:6px;flex:none">
+          <button onclick="changerLangue('fr')" id="btn-lang-fr" class="btn-dark rounded-lg" style="padding:7px 13px;font-size:11px;font-weight:800">FR</button>
+          <button onclick="changerLangue('en')" id="btn-lang-en" class="btn-dark rounded-lg" style="padding:7px 13px;font-size:11px;font-weight:800">EN</button>
+        </div>
+      </div>
+
+      <div class="sect"><span>AUDIO</span><i class="lig"></i></div>
+
+    <div class="opt">
+      <div class="pict"><span class="ico-son"></span></div>
+      <div class="txt"><b>Son</b><small>Effets sonores et musique</small></div>
+      <div id="tgl-son" class="tgl" onclick="togglePref('son')" role="switch" aria-label="Son"><i></i></div>
+    </div>
+
+    <div class="opt">
+      <div class="pict"><span class="ico-musique"></span></div>
+      <div class="txt"><b>Musique</b><small>Th&egrave;mes de menu, de combat et de boss</small></div>
+      <div id="tgl-musique" class="tgl" onclick="togglePref('musique')" role="switch" aria-label="Musique"><i></i></div>
+    </div>
+
+    <div class="sect"><span>CONFORT</span><i class="lig"></i></div>
+
+    <div class="opt">
+      <div class="pict"><span style="font-size:17px">&#128244;</span></div>
+      <div class="txt"><b>Vibrations</b><small>Retour haptique diff&eacute;renci&eacute; par action</small></div>
+      <div id="tgl-vibration" class="tgl" onclick="togglePref('vibration')" role="switch" aria-label="Vibrations"><i></i></div>
+    </div>
+
+    <div class="opt colonne">
+      <div class="haut">
+        <div class="pict"><span style="font-size:17px">&#10024;</span></div>
+        <div class="txt"><b>Particules</b><small>Faible am&eacute;liore les performances sur mobile</small></div>
+      </div>
+      <div class="seg" id="seg-particules">
+        <button data-v="faible" onclick="setParticules('faible')">Faible</button>
+        <button data-v="normal" onclick="setParticules('normal')">Normal</button>
+        <button data-v="eleve" onclick="setParticules('eleve')">&Eacute;lev&eacute;</button>
+      </div>
+    </div>
+
+    <div class="sect"><span style="color:#f87171">&#9888; ZONE DANGER</span><i class="lig" style="background:linear-gradient(90deg,rgba(239,68,68,.45),transparent)"></i></div>
+
+    <div class="danger-carte">
+      <div class="t"><span style="font-size:15px">&#128312;</span><b class="text-orange-300">Reset Run</b></div>
+      <p>Remet &agrave; z&eacute;ro le compteur Seeker Task, le streak et le claim du jour. Recharge tes bonus. Achats, vaisseaux et campagne conserv&eacute;s.</p>
+      <button onclick="askResetRun()" class="btn-warn w-full py-2.5 rounded-xl text-[11.5px] font-bold">R&Eacute;INITIALISER LE RUN</button>
+    </div>
+
+    <div class="danger-carte">
+      <div class="t"><span style="font-size:15px">&#128308;</span><b class="text-red-300">Reset Usine</b></div>
+      <p>Efface toute la progression : GC, vaisseaux, munitions, campagne, charges, &eacute;toiles. Ton solde SOL n&rsquo;est jamais touch&eacute; &mdash; il vit dans ton wallet.</p>
+      <button onclick="askResetFactory()" class="btn-danger w-full py-2.5 rounded-xl text-[11.5px] font-bold">RESET USINE</button>
+    </div>
+
+    <div class="danger-carte">
+      <div class="t"><span style="font-size:15px">&#9899;</span><b class="text-red-400">Reset Cache</b></div>
+      <p>Vide tout le stockage local, y compris les pr&eacute;f&eacute;rences, et recharge la page.</p>
+      <button onclick="askResetCache()" class="btn-dark w-full py-2.5 rounded-xl text-[11.5px] font-bold">VIDER LE CACHE</button>
+    </div>
+
+    <div id="panneau-dev"></div>
+      <div id="panneau-paliers"></div>
+      <div id="panneau-journal"></div>
+      <div id="panneau-dons"></div>
+    <div onclick="tapVersion()" class="text-center text-[9.5px] text-gray-600 mt-5" style="cursor:pointer;user-select:none">Seeker Strike &bull; Genesis Protocol v4.2 &bull; <span onclick="tapDevnet(event)" style="color:#fbbf24;cursor:pointer">DEVNET</span></div>
+  </div>
+</div>
+
+<!-- Modal de confirmation generique -->
+<div id="modal-confirm" class="modal cf">
+  <div class="glass rounded-3xl p-5 w-full max-w-sm text-center">
+    <div class="text-3xl mb-2" id="cf-icon">&#9888;</div>
+    <div class="font-o font-bold text-base mb-2" id="cf-title">Confirmation</div>
+    <div class="text-[12px] text-gray-300 mb-4 leading-relaxed" id="cf-msg"></div>
+    <div class="grid grid-cols-2 gap-2.5">
+      <button onclick="closeConfirm()" class="glass rounded-xl py-3 font-semibold text-sm">Annuler</button>
+      <button id="cf-ok" onclick="acceptConfirm()" class="btn-danger rounded-xl py-3 font-bold text-sm">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<nav class="nav" id="main-nav">
+  <button class="nav-i active" data-s="home" onclick="show('home')"><img src="data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/" alt=""/>Home</button>
+  <button class="nav-i" data-s="map" onclick="show('map')"><img src="data:image/png;base64,/*[IMAGE 4 Ko retiree pour l'audit]*/" alt=""/>Carte</button>
+  <button class="nav-i" data-s="multi" onclick="show('multi')"><img src="data:image/png;base64,/*[IMAGE 3 Ko retiree pour l'audit]*/" alt=""/>Arena</button>
+  <button class="nav-i" data-s="shop" onclick="show('shop')"><img src="data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/" alt=""/>Shop</button>
+  <button class="nav-i" data-s="quests" onclick="show('quests')" style="position:relative"><span id="badge-quetes" style="display:none;position:absolute;top:2px;right:8px;width:8px;height:8px;border-radius:50%;background:#14F195;box-shadow:0 0 6px #14F195"></span><img src="data:image/png;base64,/*[IMAGE 6 Ko retiree pour l'audit]*/" alt=""/>Quêtes</button>
+  <button class="nav-i" data-s="settings" onclick="show('settings')"><img src="data:image/png;base64,/*[IMAGE 9 Ko retiree pour l'audit]*/" alt=""/>R&eacute;glages</button>
+</nav>
+
+<script>
+/* ... script : voir 2-donnees.js a 6-outils.js ... */
+</script>
+</body>
+</html>
