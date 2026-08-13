@@ -3368,15 +3368,23 @@ CHAINE.bhCache=null; CHAINE.bhTemps=0;
    echouaient d'affilee. */
 function invaliderBlockhash(){ CHAINE.bhCache=null; CHAINE.bhTemps=0; }
 /* Duree de vie d'un blockhash : 150 blocs, soit 60 a 80 s selon la charge.
-   On retient 55 s, pas 60 : les 150 blocs courent depuis la CREATION du
-   blockhash, pas depuis l'instant ou le RPC nous le rend. Il arrive deja
-   vieux de une a trois secondes. */
-const BH_VIE = 55000;
+   On retient 52 s, pas 60. Deux raisons cumulees :
+   - les 150 blocs courent depuis la CREATION du blockhash, pas depuis
+     l'instant ou le RPC nous le rend : il arrive deja vieux de 1 a 3 s ;
+   - a 55 s le budget tombait a l'egalite exacte (45 + 7 + 3 = 55), sans le
+     moindre jeu : une diffusion a 7,5 s au lieu de 7 faisait basculer.
+   A 52 s, le pire cas garde 3 s de coussin. */
+const BH_VIE = 52000;
 /* Ce qui s'ecoule APRES la signature, avant que la transaction n'atteigne le
    reseau : reprises de diffusion (0,8 + 1,6 + 2,4 s) et allers-retours. Sans
    cette part, le budget etait juste... sauf quand le RPC sature, c'est-a-dire
    exactement le cas pour lequel `diffuser()` existe. */
 const DELAI_DIFFUSION = 7000;
+/* Coussin garde en reserve. Sans lui, le pire cas tombait a l'egalite exacte
+   avec la duree de vie du blockhash : une diffusion a 7,5 s au lieu de 7
+   suffisait a faire expirer la transaction. Il est deduit du budget, donc
+   jamais consomme par le calcul de fraicheur. */
+const BH_COUSSIN = 3000;
 /* Budget quand une signature est attendue : la fenetre de cache reellement
    utilisable tombe a BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION, soit 3 s.
    C'est peu, et c'est voulu : le cache n'a plus qu'un role, absorber un
@@ -3389,7 +3397,7 @@ async function blockhashFrais(marge){
   const m = (typeof marge==='number') ? marge : 0;
   const now=Date.now();
   const age = now - CHAINE.bhTemps;
-  if(CHAINE.bhCache && age < BH_FENETRE && age + m < BH_VIE) return CHAINE.bhCache;
+  if(CHAINE.bhCache && age < BH_FENETRE && age + m + BH_COUSSIN <= BH_VIE) return CHAINE.bhCache;
   let derniere=null;
   /* Au moins un essai par endpoint, plus une reprise sur le premier. */
   const essais = Math.max(4, RPC_DEVNET.length+2);
@@ -3505,12 +3513,16 @@ async function retrouverProvider(){
    ne se resout NI ne rejette. Le `finally` de envoyerTxSeeker ne s'execute
    alors jamais, le verrou reste pose et le bouton reste grise pour de bon.
    Toute attente d'un wallet passe donc par une borne de temps. */
-/* 45 s, pas 90 : un blockhash Solana vit environ 150 blocs, soit 60 a 80 s.
-   Attendre 90 s une signature, c'est diffuser une transaction deja perimee —
-   le joueur signe correctement et se voit refuser en « block height
-   exceeded ». 45 s suffisent largement pour basculer sur le wallet,
-   s'authentifier et confirmer. */
-const DELAI_SIGNATURE = 45000;
+/* 40 s. Ce n'est pas un choix de confort mais une contrainte physique :
+   au-dela, la transaction sera rejetee de toute facon.
+     BH_VIE (52) - DELAI_DIFFUSION (7) = 45 s : passe ce delai, meme un
+     blockhash tout frais est mort a l'arrivee.
+   Attendre plus longtemps ne rendrait pas service au joueur, cela lui ferait
+   signer pour rien. On s'arrete a 40 s, ce qui laisse 5 s de coussin, et on
+   le dit clairement plutot que de diffuser une transaction condamnee.
+   40 s restent confortables : basculer sur le wallet, s'authentifier,
+   confirmer. */
+const DELAI_SIGNATURE = 40000;
 const DELAI_RECONNEXION = 30000;
 function avecDelai(promesse, ms, quoi){
   let t;

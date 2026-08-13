@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 5-traductions.js
    Table de traduction FR vers EN
-   Lignes 5645 a 6369 du script (game/index_v37.html)
+   Lignes 5657 a 6381 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */

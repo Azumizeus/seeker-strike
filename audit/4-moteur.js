@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 4-moteur.js
    Moteur de jeu : boucle, rendu, ennemis, boss
-   Lignes 3446 a 5645 du script (game/index_v37.html)
+   Lignes 3458 a 5657 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */

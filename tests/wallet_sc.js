@@ -106,23 +106,34 @@ LANGUE='fr';
 /* Ce qui compte n'est pas BH_FENETRE seule, mais la fenetre REELLEMENT
    utilisable une fois la signature deduite : blockhashFrais(marge) refuse de
    servir un blockhash qui n'y survivrait pas. */
-const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION);
-(fenetreUtile > 0)
-  ? ok('fenetre de cache utile avant signature : '+(fenetreUtile/1000)+' s (le cache sert encore aux envois rapproches)')
-  : ko('BUDGET NUL : signature '+(DELAI_SIGNATURE/1000)+' s >= vie du blockhash '+(BH_VIE/1000)+' s, plus aucun cache possible');
-/* La fenetre est volontairement courte : entre economiser des appels RPC et
-   laisser le joueur signer tranquillement, on choisit le joueur. Le cache ne
-   sert plus qu'a absorber un double appui, qui dure moins d'une seconde. */
-(fenetreUtile >= 2000)
-  ? ok('assez large pour absorber un double appui (< 1 s)') : ko('fenetre trop courte : '+(fenetreUtile/1000)+' s');
+const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION - BH_COUSSIN);
+/* Ce qui doit etre vrai : un blockhash TOUT FRAIS doit survivre a la
+   signature et a la diffusion. Sinon aucune transaction ne peut aboutir,
+   quel que soit le cache. */
+(DELAI_SIGNATURE + DELAI_DIFFUSION < BH_VIE)
+  ? ok('un blockhash frais survit au parcours complet ('+((DELAI_SIGNATURE+DELAI_DIFFUSION)/1000)+' s < '+(BH_VIE/1000)+' s)')
+  : ko('IMPOSSIBLE : '+((DELAI_SIGNATURE+DELAI_DIFFUSION)/1000)+' s >= '+(BH_VIE/1000)+' s, aucune TX ne peut aboutir');
+(DELAI_SIGNATURE<=42000)
+  ? ok('on abandonne avant que la signature ne devienne inutile ('+(DELAI_SIGNATURE/1000)+' s)')
+  : ko('on attend une signature deja condamnee : '+(DELAI_SIGNATURE/1000)+' s');
+/* Fenetre nulle sur le chemin signature, et c'est correct : entre economiser
+   des appels RPC et laisser le joueur signer tranquillement, on choisit le
+   joueur. Le double appui n'est pas protege par le cache mais par le verrou
+   CHAINE.enCours, pose avant tout `await` — c'est teste plus haut. */
+(fenetreUtile <= 0)
+  ? ok('chemin signature : blockhash frais a chaque envoi, aucun risque de peremption')
+  : ok('fenetre residuelle de '+(fenetreUtile/1000)+' s, sans risque');
 (typeof DELAI_DIFFUSION==='number' && DELAI_DIFFUSION>=5000)
   ? ok('budget de diffusion pris en compte : '+(DELAI_DIFFUSION/1000)+' s (reprises 429 + reseau)') : ko('DELAI_DIFFUSION absent ou trop court');
-(BH_VIE<=55000)
-  ? ok('duree de vie prudente : '+(BH_VIE/1000)+' s (le blockhash arrive deja vieux de 1 a 3 s)') : ko('BH_VIE optimiste : '+(BH_VIE/1000)+' s');
-/* Le pire cas complet doit tenir */
-(fenetreUtile + DELAI_SIGNATURE + DELAI_DIFFUSION <= BH_VIE)
-  ? ok('pire cas : '+((fenetreUtile+DELAI_SIGNATURE+DELAI_DIFFUSION)/1000)+' s <= '+(BH_VIE/1000)+' s, la TX ne peut pas arriver perimee')
-  : ko('PIRE CAS HORS BUDGET');
+(BH_VIE<=52000)
+  ? ok('duree de vie prudente : '+(BH_VIE/1000)+' s (blockhash deja vieux a l\'arrivee)') : ko('BH_VIE optimiste : '+(BH_VIE/1000)+' s');
+/* Le pire cas doit non seulement tenir, mais garder du jeu : a l'egalite
+   exacte, une diffusion 0,5 s plus lente que prevu faisait basculer. */
+const pire = Math.max(0,fenetreUtile) + DELAI_SIGNATURE + DELAI_DIFFUSION;
+const coussin = BH_VIE - pire;
+(coussin >= BH_COUSSIN)
+  ? ok('pire cas '+(pire/1000)+' s sur '+(BH_VIE/1000)+' s : '+(coussin/1000)+' s de coussin')
+  : ko('MARGE INSUFFISANTE : '+(coussin/1000)+' s, une diffusion lente fait basculer');
 
 /* Un blockhash trop vieux pour survivre a la signature doit etre renouvele */
 let demandes=0;

@@ -1,7 +1,7 @@
-# Brief d'intégration Noah — Seeker Strike v4.3
+# Brief d'intégration Noah — Seeker Strike v4.4
 
 *À donner tel quel à l'assistant qui aide au déploiement.*
-*Dernière mise à jour : 12 août 2026, 21 h 30 (Europe/Paris).*
+*Dernière mise à jour : 13 août 2026, 02 h 20 (Europe/Paris).*
 
 ---
 
@@ -79,7 +79,7 @@ sont restés cassés sans qu'aucun test ne le voie. Vérifiez le compteur.
 cd tests && ./run.sh
 ```
 
-**106 exécutions sur les 3 builds** (34 scénarios × 3 harnais + 4 suites jsdom).
+**118 exécutions sur les 3 builds** (38 scénarios × 3 harnais + 4 suites jsdom).
 Sortie attendue : `TOUT PASSE`. Seules les lignes en échec s'affichent.
 Compter environ 25 minutes.
 
@@ -100,22 +100,34 @@ style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src    https://fonts.gstatic.com;
 img-src     'self' data:;
 media-src   'self' data:;
-connect-src https://api.devnet.solana.com https://rpc.ankr.com https://esm.sh;
+connect-src https://devnet.helius-rpc.com
+            https://api.devnet.solana.com
+            https://solana-devnet.g.alchemy.com
+            https://solana-devnet.api.onfinality.io
+            https://esm.sh;
 frame-src   'none';
 ```
 
 `'unsafe-inline'` sur `script-src` est **requis** : le jeu est un `<script>`
 inline. C'est la contrepartie assumée de l'architecture sans build.
 
-`rpc.ankr.com` est le RPC devnet de secours (voir « Résistance à la saturation »
-plus bas). L'omettre ne casse rien : le jeu retombe sur le RPC officiel.
+**Les quatre domaines RPC doivent y être.** Ils correspondent un pour un au
+tableau `RPC_DEVNET_DEFAUT` de la source. En omettre un ne provoque pas une
+erreur lisible : le navigateur refuse la requête, `causeLisible()` ne sait pas
+traduire un blocage CSP, et le joueur voit un message générique. Le repli
+automatique sauvera la démo, mais sur un RPC plus lent — c'est-à-dire en
+perdant précisément ce pour quoi Helius a été pris.
+
+`rpc.ankr.com` a été **retiré** du pool : son API est passée payante et ses
+réponses ne sont plus lisibles par web3.js. S'il traîne encore dans une CSP,
+il est sans effet.
 
 Aucun de ces domaines n'est nécessaire pour jouer. Bloquer `esm.sh` désactive
 la couche on-chain, le jeu reste jouable de bout en bout.
 
 ---
 
-## Résistance à la saturation du RPC — nouveau en v4.3
+## Résistance à la saturation du RPC
 
 Le RPC public `api.devnet.solana.com` limite chaque IP à environ 100 appels par
 tranche de 10 secondes. En enchaînant les envois, un joueur recevait
@@ -123,12 +135,51 @@ tranche de 10 secondes. En enchaînant les envois, un joueur recevait
 
 | Mesure | Effet |
 |---|---|
-| Blockhash mis en cache 40 s (`blockhashFrais()`) | 5 envois consécutifs = 1 appel RPC au lieu de 5. C'était la source principale des 429. |
+| Blockhash mis en cache, fenêtre adaptative (`blockhashFrais(marge)`) | Le cache n'est servi que si le blockhash survivra à l'attente de signature. **Sur le chemin d'envoi la marge est telle que la fenêtre utile tombe à zéro : chaque envoi signé repart d'un blockhash frais.** C'est assumé — voir plus bas. |
 | Reprise avec attente croissante + bascule de RPC | Sur un 429 : attente 0,8 s → 1,6 s → 2,4 s, bascule sur Ankr, 4 tentatives avant abandon |
 | Délai de 20 s entre deux lots (`DELAI_LOT`) | Le bouton affiche `PATIENTE 14s` en compte à rebours au lieu de partir dans le mur |
 
 `causeLisible()` traduit désormais toute erreur technique en une phrase
 compréhensible, traduite FR/EN. Le joueur ne voit plus jamais de dump JSON.
+
+### Budget de temps d'une transaction
+
+Une transaction doit naître, être signée et atteindre le réseau avant que son
+blockhash n'expire. Le budget est vérifié par les tests, et chaque valeur a une
+raison :
+
+| Constante | Valeur | Pourquoi |
+|---|---|---|
+| `BH_VIE` | 52 s | 150 blocs ≈ 60 s, moins 1 à 3 s car le blockhash arrive déjà vieux, moins une marge d'incertitude |
+| `DELAI_SIGNATURE` | 40 s | **Borné par la physique** : au-delà de `BH_VIE − DELAI_DIFFUSION`, la signature serait rejetée de toute façon. Attendre plus ne rend pas service, ça fait signer pour rien |
+| `DELAI_DIFFUSION` | 7 s | Reprises de `diffuser()` (0,8 + 1,6 + 2,4 s) et allers-retours réseau |
+| `BH_COUSSIN` | 3 s | Réserve. Sans elle le pire cas tombait à l'égalité exacte : une diffusion à 7,5 s au lieu de 7 faisait expirer la transaction |
+
+Pire cas : 2 + 40 + 7 = 49 s sur 52 disponibles. **3 s de coussin garanties.**
+
+Ne touchez à aucune de ces valeurs isolément : elles forment un budget, et
+`tests/wallet_sc.js` échoue si la somme ne tient plus.
+
+### Sur quoi repose réellement la résistance à la saturation
+
+Le cache de blockhash n'y participe plus. Une signature peut prendre 40 s, une
+diffusion 7 s de plus, et un blockhash ne vaut que 52 s : presque aucun
+blockhash mis en cache ne survit à ce budget. En pratique, chaque envoi signé
+en redemande un frais.
+
+C'est un arbitrage délibéré : une transaction rejetée pour blockhash périmé
+coûte bien plus cher qu'un appel RPC. Ce qui protège désormais de la
+saturation, dans l'ordre :
+
+1. **Helius en tête du pool** — quota confortable, pas de limite par IP partagée
+2. **`DELAI_LOT = 20 s`** entre deux lots — c'est lui qui borne le débit
+3. **`diffuser()`** — reprise et bascule de RPC sur 429
+
+**Point de vigilance pour la démo** : si Helius tombe et qu'on retombe sur
+`api.devnet.solana.com` (~100 appels / 10 s par IP, partagée en mobile), on est
+à un `getLatestBlockhash` par envoi. Ça passe grâce au délai de 20 s, mais la
+marge est mince. En cas de doute pendant la démo : Réglages → Serveur Solana →
+coller un autre endpoint, effet immédiat, sans redéploiement.
 
 **Pour une démo devant jury**, si le débit devient un souci : renseigner un RPC
 dédié (Helius, QuickNode, Alchemy — l'offre gratuite suffit largement) en tête
@@ -215,4 +266,4 @@ automatisés vérifient la logique, pas le ressenti ni le rendu.
 
 ---
 
-*Seeker Strike v4.3 · AzumiZeus · NoahAI Nitro 01*
+*Seeker Strike v4.4 · AzumiZeus · NoahAI Nitro 01*
