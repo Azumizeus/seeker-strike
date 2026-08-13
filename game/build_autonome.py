@@ -135,6 +135,22 @@ print("  musiques reintegrees : %d" % len(pistes))
 s = s.replace("Genesis Protocol v4.2 &bull; <span style=\"color:#fbbf24\">devnet</span>",
               "Genesis Protocol v4.2 &bull; autonome &bull; <span style=\"color:#fbbf24\">devnet</span>")
 
+# ---------- 5. retrait du mode developpeur ----------
+# Le jeu publie est un fichier HTML lisible par n'importe qui : un mot de passe
+# ou une combinaison d'appuis n'y protege rien, ils se lisent dans le source.
+# On retire donc le bloc entier. On laisse des fonctions vides pour qu'un vieux
+# onclick ou une sauvegarde avec S.dev=true ne provoque aucune erreur.
+stub = ("/* MODE DEVELOPPEUR : retire du build public (voir build_autonome.py). */\n"
+        "function tapVersion(){}\n"
+        "function devToutDebloquer(){} function devCredits(){}\n"
+        "function devVider(){} function devQuitter(){}\n")
+s, n = re.subn(r"/\* ==== DEV-DEBUT ====.*?/\* ==== DEV-FIN ==== \*/", stub, s, flags=re.S)
+if n != 1:
+    raise SystemExit("ERREUR : bloc DEV-DEBUT/DEV-FIN introuvable dans la source (%d trouve)" % n)
+# on supprime aussi le point d'entree : plus rien a taper cinq fois
+s = s.replace('onclick="tapVersion()" ', '')
+print("  mode developpeur : retire du build public")
+
 io.open(DST,"w",encoding="utf-8").write(s)
 print("\n%s : %.2f Mo  (source externalisee : %.2f Mo)" %
       (DST, os.path.getsize(DST)/1048576, depart/1048576))

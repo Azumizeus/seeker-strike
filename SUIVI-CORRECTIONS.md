@@ -39,6 +39,11 @@ correction — on garde la trace.
 | `TXT-7` | **10 boss** dans `SOUMISSION.md` (×3), `KIT-COMM-X.md` (×2), `TESTER-SUR-SEEKER.md`. Les 12 tweets revérifiés < 280 car. | `ac50fac` |
 | `TXT-8` | Badge `air-badge` : « ✅ ÉLIGIBLE » → **« ✅ VÉRIFIÉ »** + i18n `"✅ VERIFIED"`. Dernier reste visible du discours airdrop. | `ac50fac` |
 | `PRJ-5` | **`publier.sh` ne fait plus `git add -A`** → `git add index.html` + `git add -u`. Plus de fichier de travail embarqué par accident. | `ac50fac` |
+| `RND-2` | **Une seule teinte de danger** : les 3 tirs ennemis `#fb923c` → `#fb7185`, déjà la couleur par défaut des tirs ennemis. | à pousser |
+| `SOL-1` | **`lireSoldeSOL()` ajoutée** (l. 3690) + branchée à la connexion wallet (l. 4039). `getBalance` n'existait nulle part. | à pousser |
+| `TXT-9` | Toast du mode dev : « 12 vaisseaux » → **14** (`SHIPS` en contient 14). | à pousser |
+| `SEC-1` | **Mode développeur retiré du build public.** Sentinelles `DEV-DEBUT`/`DEV-FIN` dans la source, `build_autonome.py` remplace le bloc par des fonctions vides et supprime le `onclick`. Vérifié : `S.dev=true`, `_devTaps>=5` et le `onclick` = **0 occurrence** dans le build. | à pousser |
+| `SOL-4` | **Rafraîchissement des soldes** : `rafraichirSoldes()` + bouton « ↻ ACTUALISER LES SOLDES » (visible seulement wallet connecté) + relecture auto après chaque tx et après le lot Seeker Task. Anti-rebond 3 s. | à pousser |
 
 **Vérification faite à chaque fois :** extraction du bloc script inline + `node --check`
 → syntaxe OK. La suite de 118 tests n'a pas pu tourner jusqu'au bout via le pont
@@ -76,9 +81,10 @@ Choisis-en un et aligne tout : soumission, README, posts X, bio.
 | ID | Gravité | Quoi | Où | Statut |
 |---|---|---|---|---|
 | `RND-1` | 🟠 | **Fusion additive jamais utilisée.** `'lighter'` = 0 occurrence. Le plus gros écart de rendu. | 5942, 5911, 5825 | à faire |
-| `RND-2` | 🔴 | **Tirs ennemis `#fb923c` vs ambre `#fbbf24` (27 usages HUD).** Deux oranges dont un veut dire « ça te tue ». Jouabilité. | 5498, 5508, 5511 | à faire |
+| `RND-2` | 🔴 | ~~Tirs ennemis `#fb923c`~~ — **fait**. Bonus découvert : l'orange était aussi la couleur de tir du vaisseau **Comet** (l. 1655). Tes tirs et ceux qui te tuent partageaient une teinte. | 5498, 5508, 5511 | **fait** |
 | `RND-3` | 🟠 | **`shadowBlur` dans les boucles** par projectile et par particule. Réglé en même temps que `RND-1`. | 5911, 5937, 5944 | à faire |
-| `RND-4` | 🟡 | **Palette : doublons.** 4 gris, 4 verts, 4 violets. Ancrer sur `#14f195` / `#9945ff`. | partout | à faire |
+| `RND-4` | 🟠 | **Audit complet de la palette** — 22 couleurs vers 9 rampes. Devenu prioritaire : `RND-7` en dépend. Ancrer sur `#14f195` / `#9945ff`. | partout | **suivant** |
+| `RND-7` | 🔴 | **L'ambre `#fbbf24` veut dire 5 choses sur le terrain** : ennemi poseur (5134), ennemis à prime (4961, 5176), 2 boss (1509, 1515), ramassable mitra (5213) et les tirs du vaisseau King (1657). « Fonce dessus » et « ça te tue » partagent une teinte. **Décision reportée à l'audit palette `RND-4`.** | plusieurs | bloqué par `RND-4` |
 | `RND-5` | 🟡 | Profondeur du fond : plus loin = plus sombre et désaturé. | 5810 | à faire |
 | `RND-6` | ⚪ | Bloom via canvas réduit + `ctx.filter`. **En dernier**, derrière une préférence. | — | à faire |
 
@@ -111,7 +117,7 @@ Choisis-en un et aligne tout : soumission, README, posts X, bio.
 
 | ID | Gravité | Quoi | Statut |
 |---|---|---|---|
-| `SOL-1` | 🔴 | **Le solde SOL devnet ne s'affiche pas dans le wallet côté jeu.** | **à diagnostiquer** |
+| `SOL-1` | 🔴 | ~~Solde SOL devnet non affiché~~ — **cause** : `getBalance` n'était appelé **nulle part**. `S.sol` partait de 0 et n'était que décrémenté par les achats, jamais lu sur la chaîne. Corrigé. | **fait** |
 | `SOL-2` | 🟡 | Wrapper APK (WebView / Capacitor) pour le dApp Store. KYC, ~0,2 SOL, review 3-5 jours ouvrés. | à faire |
 | `SOL-3` | ⚪ | Passage mainnet — voir `docs/PASSER-EN-MAINNET.md`. | plus tard |
 
@@ -157,7 +163,7 @@ Choisis-en un et aligne tout : soumission, README, posts X, bio.
 
 # H · À DIAGNOSTIQUER
 
-- `SOL-1` — solde SOL devnet non affiché
+- ~~`SOL-1`~~ — fermé le 13/08 au soir
 - Les **118 tests n'ont pas tourné** depuis les corrections du 13/08 → `cd tests && bash run.sh` en local
 
 ---

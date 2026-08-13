@@ -631,6 +631,9 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
           <div class="solde"><u>SKR &bull; TON WALLET</u><b class="text-green-300" id="b-skrtok">0</b></div>
           <div class="solde"><u>GC &bull; CR&Eacute;DITS</u><b class="text-emerald-200" id="b-skr">0</b></div>
         </div>
+        <button id="btn-maj-soldes" onclick="rafraichirSoldes(true)" class="hidden"
+          style="width:100%;margin-top:7px;padding:5px;border-radius:9px;font-size:9.5px;
+          letter-spacing:.5px;color:#9ca3af;background:rgba(255,255,255,.045)">&#8635; ACTUALISER LES SOLDES</button>
       </div>
     </div>
 
@@ -3684,6 +3687,47 @@ async function lireSoldeSKR(){
   }catch(e){ LOG.warn('[SEEKER] solde SKR illisible : '+(e&&e.message)); return S.soldeSkr||0; }
 }
 
+/* Lit le solde SOL du wallet directement sur la chaine.
+   Sans ca, #b-sol restait fige a 0.00 : S.sol n'etait jamais alimente, il
+   n'etait que decremente par les achats. Meme structure que lireSoldeSKR. */
+async function lireSoldeSOL(){
+  if(!S.walletReel || !S.addressComplete) return 0;
+  const w3=await chargerWeb3(); if(!w3) return 0;
+  try{
+    const { PublicKey } = w3;
+    const parSol = w3.LAMPORTS_PER_SOL || 1e9;   /* 1 SOL = 1e9 lamports */
+    const proprio = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
+    const lamports = await CHAINE.connexion.getBalance(proprio);
+    S.sol = +((lamports||0)/parSol).toFixed(4);
+    return S.sol;
+  }catch(e){ LOG.warn('[SEEKER] solde SOL illisible : '+(e&&e.message)); return S.sol||0; }
+}
+
+
+/* Rafraichit les deux soldes du wallet.
+   `manuel` = declenche par le joueur : on lui repond, sinon il ne sait pas
+   si ca a fonctionne. Anti-rebond : deux appels automatiques rapproches ne
+   relisent pas la chaine pour rien (le pool RPC est limite). */
+let _majSoldesT=0;
+async function rafraichirSoldes(manuel){
+  if(!S.walletReel || !S.addressComplete){
+    if(manuel) toast(T('Connecte ton wallet pour lire tes soldes'), 2400);
+    return;
+  }
+  const now=Date.now();
+  if(!manuel && now-_majSoldesT<3000) return;
+  _majSoldesT=now;
+  if(manuel) toast(T('Lecture des soldes…'), 1100);
+  try{
+    await Promise.all([lireSoldeSKR(), lireSoldeSOL()]);
+    save(); ui();
+    if(manuel) toast('✅ '+S.sol.toFixed(3)+' SOL • '+(S.soldeSkr||0).toFixed(0)+' SKR', 2400);
+  }catch(e){
+    LOG.warn('[SEEKER] rafraichissement des soldes : '+(e&&e.message));
+    if(manuel) toast(T('Lecture impossible, reessaie'), 2400);
+  }
+}
+
 /* Construit la transaction de la Seeker Task : les 15 memos et le pourboire
    de tresorerie tiennent dans UNE seule transaction, donc UNE seule signature.
    Retourne la liste des instructions. */
@@ -4018,8 +4062,8 @@ async function toggleWallet(){
       S.address=res.address.slice(0,4)+'…'+res.address.slice(-4);
       S.addressComplete=res.address;
       toast('✅ '+wallet.name+' connecté • '+S.address, 3000);
-      /* Le solde SKR se lit sur la chaine, jamais devine. */
-      lireSoldeSKR().then(()=>{ save(); ui(); if(typeof renderShips==='function') renderShips(); });
+      /* Les soldes SKR et SOL se lisent sur la chaine, jamais devines. */
+      Promise.all([lireSoldeSKR(), lireSoldeSOL()]).then(()=>{ save(); ui(); if(typeof renderShips==='function') renderShips(); });
       if(!localStorage.getItem('ss35_first')){
         S.skr+=600; localStorage.setItem('ss35_first','1');
         setTimeout(()=>toast('\ud83c\udf81 '+T('Bonus de bienvenue')+' \u2022 +600 GC'), 1200);
@@ -4061,6 +4105,7 @@ function majBadgeWallet(){
    Sert uniquement aux stats du joueur (achats, claims, missions). */
 function addTx(action){
   S.txCount=(S.txCount||0)+1;
+  rafraichirSoldes();          /* une tx vient de passer : le solde a bouge */
   save(); ui();
 }
 
@@ -4104,6 +4149,7 @@ async function envoyerSeekerTask(){
   }
   _dernierLot = Date.now();
   S.txOnChain=15;
+  rafraichirSoldes();          /* lot Seeker Task confirme : on relit le solde */
   S.lotsTask=(S.lotsTask||0)+1;
   creditTX(15);                     /* 15 memos confirmes = 15 TX on-chain */
   Audio2.jouerSfx('button_click');
@@ -5495,7 +5541,7 @@ function majEnnemi(e,g){
         const munition = e.avance?'lance':'plasma';
         if(e.ecole==='eventail'){
           /* Trois traits ecartes : couvre une zone, se contourne par les cotes */
-          for(let k=-1;k<=1;k++) tirEnnemi(e.x, e.y+18, k*1.9, 5.1, '#fb923c', munition);
+          for(let k=-1;k<=1;k++) tirEnnemi(e.x, e.y+18, k*1.9, 5.1, '#fb7185', munition);
           e.tir = Math.round(66/(g.mode.cadence||1));
         } else if(e.ecole==='predictif'){
           /* Vise ou le joueur SERA : rester en mouvement rectiligne ne sauve plus */
@@ -5505,10 +5551,10 @@ function majEnnemi(e,g){
           e.viseX=p.x;
           const cible=p.x+vx*dt*0.5;
           const dx=Math.max(-2.6,Math.min(2.6,(cible-e.x)*0.02));
-          tirEnnemi(e.x, e.y+18, dx, 5.4, '#fb923c', munition);
+          tirEnnemi(e.x, e.y+18, dx, 5.4, '#fb7185', munition);
           e.tir = Math.round(52/(g.mode.cadence||1));
         } else {
-          tirEnnemi(e.x,e.y+18,0,5.6,'#fb923c', munition);                  /* rafale de 3 */
+          tirEnnemi(e.x,e.y+18,0,5.6,'#fb7185', munition);                  /* rafale de 3 */
           e.tir = Math.round(((e.rafale%3===0) ? 78 : 11) / (g.mode.cadence||1));
         }
       }
@@ -7858,6 +7904,9 @@ function renderSecrets(){
   }).join('');
 }
 
+/* ==== DEV-DEBUT ==== bloc retire du build public par build_autonome.py.
+   Un fichier HTML servi publiquement est lisible par tous : un mot de passe
+   n'y protegerait rien. Le seul vrai verrou, c'est l'absence du code. */
 /* ============================================================
    MODE DEVELOPPEUR
    Cinq appuis sur le numero de version dans les Reglages.
@@ -7885,7 +7934,7 @@ function devToutDebloquer(){
   NODES.forEach(x=>{ S.nodeStars[x.id]=3; });
   S.skr+=50000;
   save(); ui(); renderSettings();
-  toast('Tout ouvert • 12 vaisseaux, 22 secteurs, 4 secrets, +50 000 GC', 4000);
+  toast('Tout ouvert • 14 vaisseaux, 22 secteurs, 4 secrets, +50 000 GC', 4000);
 }
 function devCredits(){ S.skr+=25000; save(); ui(); toast('+25 000 GC', 1800); }
 function devVider(){
@@ -7895,6 +7944,7 @@ function devVider(){
   toast('Progression remise a zero (le mode dev reste actif)', 3000);
 }
 function devQuitter(){ S.dev=false; _devTaps=0; save(); renderSettings(); toast('Mode développeur désactivé',2000); }
+/* ==== DEV-FIN ==== */
 
 /* CODE ORBITAL : les quatre coins de l'accueil, dans le sens horaire */
 let _coinsSeq=[], _coinsT=0;
@@ -8585,6 +8635,8 @@ function ui(){
   const bv=document.getElementById('badge-validateur');
   if(bv) bv.classList.toggle('hidden', !debloque('validateur'));
   document.getElementById('b-sol').textContent=S.sol.toFixed(2);
+  const bm=document.getElementById('btn-maj-soldes');
+  if(bm) bm.classList.toggle('hidden', !S.walletReel);
   const bt=document.getElementById('b-skrtok');
   if(bt) bt.textContent=(S.soldeSkr||0).toLocaleString(undefined,{maximumFractionDigits:0});
   document.getElementById('b-skr').textContent=Math.floor(S.skr).toLocaleString();
