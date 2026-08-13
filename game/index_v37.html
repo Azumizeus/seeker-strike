@@ -2613,7 +2613,7 @@ const TUTO=[
   {p:'\ud83d\udca5', t:'TIRER', d:"Le tir part tout seul, en continu. Tu n'as aucun bouton \u00e0 presser.\n\nTout se joue au placement : coupe les lignes de tir, contourne les boucliers, ne reste jamais immobile."},
   {p:'\ud83d\udee1\ufe0f', t:'CONNA\u00ceTRE L\u2019ENNEMI', d:"Chaque unit\u00e9 a un comportement fixe : le kamikaze fonce, le t\u00e9l\u00e9porteur appara\u00eet derri\u00e8re toi, le porteur de bouclier renvoie les tirs de face.\n\nLe Bestiaire les d\u00e9crit tous."},
   {p:'\u2b50', t:'DIFFICULT\u00c9 ET \u00c9TOILES', d:"Chaque n\u0153ud se joue en Normal, Difficile ou Extr\u00eame. Plus dur = jusqu'\u00e0 3,2\u00d7 de r\u00e9compenses.\n\nUn n\u0153ud termin\u00e9 reste rejouable : seule ta meilleure \u00e9toile compte."},
-  {p:'\ud83c\udfaf', t:'OBJECTIF', d:"13 secteurs, 3 boucles, 4 boss. Bats le Vortex pour ouvrir la boucle 2, la Corruption pour la boucle 3, puis affronte le Nexus.\n\n15 transactions te rendent \u00e9ligible \u00e0 l'airdrop SKR."}
+  {p:'\ud83c\udfaf', t:'OBJECTIF', d:"22 secteurs, 2 campagnes. Bats le Vortex puis la Corruption pour ouvrir la route du Nexus, qui referme GENESIS. Au-del\u00e0 commence CHAOS PROTOCOL.\n\n15 transactions te rendent \u00e9ligible \u00e0 l'airdrop SKR."}
 ];
 let _tutoIdx=0;
 function ouvrirTuto(){ _tutoIdx=0; document.getElementById('tuto').classList.add('on'); majTuto(); }
@@ -4254,7 +4254,7 @@ function renderMap(){
     { top:'16%', left:'34%' },  // 20 Portail - seuil de l'anomalie
     { top:'6%',  left:'50%' }   // 21 NEXUS PRIME - dans l'anomalie
   ];
-  /* Chemin serpentant : 13 noeuds du QG (bas) au Nexus (haut) */
+  /* Chemin serpentant : 22 noeuds, du QG (bas) au sommet de la carte (haut) */
   const positions = [
     { top:'95%', left:'50%' },  // 0  QG Seeker
     { top:'88%', left:'34%' },  // 1  Eveil
