@@ -40,16 +40,18 @@
 ## STRUCTURE DOSSIER
 
 ```
-game/index.html      ← le jeu
-game/assets/         ← 31 PNG (jamais déplacer)
-docs/REPRISE.md      ← plan de reprise session Noah
-docs/ETAT-ACTUEL.md  ← état technique complet
-docs/PROMPTS.md      ← prompts prêts à l'emploi
-assets/              ← médias hackathon (vide)
-_backup/             ← zip source original
+index.html           ← le jeu servi par GitHub Pages (copie du build autonome)
+game/index_v37.html  ← LA SOURCE DE VÉRITÉ
+game/assets/         ← 99 webp + 8 mp3 (jamais déplacer, chemins relatifs)
+tests/               ← 118 exécutions, ./run.sh
+docs/                ← documentation, commence par INDEX.md
+noah-build/          ← déploiement à assets externes
+sources/             ← bibliothèque créative (hors Git)
+medias/              ← vidéos, captures, branding (hors Git)
+_a-ranger/           ← écarté mais conservé (hors Git)
 ```
 
-**Ordre de lecture en reprise de session** : `docs/REPRISE.md` → `docs/ETAT-ACTUEL.md` → `docs/PROMPTS.md`
+**Ordre de lecture en reprise de session** : `docs/INDEX.md` → `docs/BRIEF-KIMI-K3.md` → `docs/JOURNAL-MODIFS.md`
 
 ---
 

@@ -156,7 +156,7 @@ mauvaises raisons : `skr_sc` et `don_sc` n'exerçaient jamais le transfert SPL
 (chemin SKR fermé sur devnet sans `mintTest`), `p191_sc` attendait un message
 brut désormais traduit. Corrigées.
 
-Détail complet et code : `docs/REPONSE-NOAH.md`.
+Détail complet et code : `docs/historique/REPONSE-NOAH.md`.
 
 ### Bloc 8 — Pool RPC refait (v4.4)
 
@@ -230,7 +230,7 @@ qui rendait le blocage invisible. Trois états désormais.
 base64, inscrit la version dans chaque en-tête. Trois libellés de version se
 contredisaient dans l'interface (4.0 / 4.2 / 4.2), tous alignés sur v4.4.
 
-Détail complet : `docs/REPONSE-NOAH-2.md`.
+Détail complet : `docs/historique/REPONSE-NOAH-2.md`.
 
 ### Bloc 11 — Budget de temps du blockhash (troisième audit Noah)
 
@@ -252,7 +252,7 @@ une seconde. Vérifier l'historique on-chain avant relance serait trop lourd
 à J-1 ; le message renvoie donc vers le journal plutôt que d'inviter à
 relancer à l'aveugle. Le drapeau `CHAINE.canalAuto` distingue les deux cas.
 
-Détail : `docs/REPONSE-NOAH-3.md`.
+Détail : `docs/historique/REPONSE-NOAH-3.md`.
 
 ---
 

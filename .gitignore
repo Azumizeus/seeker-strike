@@ -5,11 +5,16 @@ Thumbs.db
 # Dependances reinstallables (26 Mo, npm install les remet)
 tests/node_modules/
 
-# Sources originales, utiles en local seulement (330 Mo)
+# Sources creatives et medias : lourds, utiles en local seulement
+sources/
+medias/
 _backup/
+_a-ranger/
 
-# Archives : elles se regenerent depuis les builds
+# Archives et videos : jamais dans un depot
 *.zip
+*.mp4
+*.mov
 ziBRgzZL
 
 # Vestiges d'anciennes versions
@@ -20,6 +25,3 @@ game/assets_opt/
 # Fichiers temporaires
 *.tmp
 docs/_test.*
-
-# Sources graphiques : utiles en local, inutiles dans le depot
-logo , icone , banniere ecosysteme Seeke Nexus/

@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # Batterie de tests Seeker Strike — rejoue tout sur les 3 builds.
 cd "$(dirname "$0")"
+
+# `timeout` est une commande GNU : elle n'existe pas sur macOS. Sans ce garde,
+# chaque test « plante » alors que le jeu va tres bien. On utilise gtimeout
+# (coreutils) s'il est la, sinon on se passe de limite de temps.
+if command -v timeout >/dev/null 2>&1; then TO="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then TO="gtimeout"
+else TO=""; fi
+lance(){ # lance <secondes> <commande...>
+  if [ -n "$TO" ]; then "$TO" "$@"; else shift; "$@"; fi
+}
+
 SCENARIOS="audit_sc audit_dyn2 boss_sc enn2_sc prog_sc calib_sc inf_sc \
 sign_sc recon_sc b58_sc task_sc tres_sc skr_sc don_sc pal_sc egg_sc term_sc \
 boost_sc sim_sc secu_sc cap2_sc skrmain_sc demo2_sc demo3_sc muni_sc paysage_sc lore_sc \
@@ -12,7 +23,7 @@ for sc in $SCENARIOS; do
   [ -f "$sc.js" ] || continue
   for h in base auto noah; do
     tot=$((tot+1))
-    r=$(SCENARIO="$PWD/$sc.js" timeout 180 node "harness_$h.js" 2>&1 | grep -E "^RES (TOUS|[0-9]+ ECHEC)")
+    r=$(SCENARIO="$PWD/$sc.js" lance 180 node "harness_$h.js" 2>&1 | grep -E "^RES (TOUS|[0-9]+ ECHEC)")
     case "$r" in *TOUS*) ;; *) printf "  %-5s %-12s %s\n" "$h" "$sc" "${r:-PLANTAGE}"; ech=$((ech+1));; esac
   done
 done
@@ -21,7 +32,7 @@ for t in $AUTONOMES; do
   [ -f "$t.js" ] || continue
   tot=$((tot+1))
   printf "  %-12s " "$t"
-  r=$(timeout 180 node "$t.js" 2>&1 | tail -1); echo "$r"
+  r=$(lance 180 node "$t.js" 2>&1 | tail -1); echo "$r"
   case "$r" in *TOUS*) ;; *) ech=$((ech+1));; esac
 done
 echo "------------------------------------------------"
