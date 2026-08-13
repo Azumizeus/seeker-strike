@@ -3438,8 +3438,12 @@ async function diffuser(brut, echeance){
     catch(e){
       derniere=e;
       if(!estRpcCasse(e)) throw e;
-      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      /* L'echeance se juge AVANT d'ecarter l'endpoint : passe ce point on
+         abandonne de toute facon, et un reseau mobile lent n'est pas une
+         panne de RPC. Sinon un seul `failed to fetch` tardif condamnait
+         Helius pour toute la session. */
       if(echeance && Date.now() > echeance) throw new Error('blockhash not found : echeance depassee');
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
       if(!rpcSuivant()) throw new Error('AUCUN_RPC');
       await pause(estSature(e) ? 800*(essai+1) : 150);
     }
@@ -3740,7 +3744,11 @@ async function envoyerTxSeeker(action){
        Si elle echoue sur une extension, inutile d'aller plus loin : le budget
        du blockhash serait deja creve par la reconnexion que signerEtEnvoyer
        tenterait ensuite. On rend la main tout de suite, sans appel RPC. */
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
       return null;
     }
@@ -6408,7 +6416,11 @@ async function payerEnSKR(montant, etiquette){
              : new TextEncoder().encode('seeker-strike:'+etiquette)
     }));
 
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
       return null;
     }
@@ -6445,7 +6457,11 @@ async function donnerSOL(montant){
     if(!w3) return toast('❌ web3.js indisponible', 3000);
     const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
     const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       return toast('\u274c '+T('session wallet perdue, reconnecte-toi'), 3600);
     }
     const tx = new Transaction({ feePayer:joueur,

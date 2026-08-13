@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 3-solana.js
    Integration Solana : wallet, signatures, RPC, paliers
-   Lignes 2109 a 3511 du script (game/index_v37.html)
+   Lignes 2109 a 3519 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -236,8 +236,12 @@ async function diffuser(brut, echeance){
     catch(e){
       derniere=e;
       if(!estRpcCasse(e)) throw e;
-      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      /* L'echeance se juge AVANT d'ecarter l'endpoint : passe ce point on
+         abandonne de toute facon, et un reseau mobile lent n'est pas une
+         panne de RPC. Sinon un seul `failed to fetch` tardif condamnait
+         Helius pour toute la session. */
       if(echeance && Date.now() > echeance) throw new Error('blockhash not found : echeance depassee');
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
       if(!rpcSuivant()) throw new Error('AUCUN_RPC');
       await pause(estSature(e) ? 800*(essai+1) : 150);
     }
@@ -538,7 +542,11 @@ async function envoyerTxSeeker(action){
        Si elle echoue sur une extension, inutile d'aller plus loin : le budget
        du blockhash serait deja creve par la reconnexion que signerEtEnvoyer
        tenterait ensuite. On rend la main tout de suite, sans appel RPC. */
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
       return null;
     }

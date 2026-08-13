@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 4-moteur.js
    Moteur de jeu : boucle, rendu, ennemis, boss
-   Lignes 3511 a 5717 du script (game/index_v37.html)
+   Lignes 3519 a 5733 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -1804,7 +1804,11 @@ async function payerEnSKR(montant, etiquette){
              : new TextEncoder().encode('seeker-strike:'+etiquette)
     }));
 
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
       return null;
     }
@@ -1841,7 +1845,11 @@ async function donnerSOL(montant){
     if(!w3) return toast('❌ web3.js indisponible', 3000);
     const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
     const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
-    if(!(await amorcerWallet()) && S.walletType==='ext'){
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
       return toast('\u274c '+T('session wallet perdue, reconnecte-toi'), 3600);
     }
     const tx = new Transaction({ feePayer:joueur,

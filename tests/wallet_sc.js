@@ -214,7 +214,10 @@ CHAINE.connexion=new CHAINE.mod.Connection('test');
 const t0d=Date.now();
 try{ await diffuser(new Uint8Array([1]), Date.now()-1); ko('aucune erreur alors que l\'echeance est depassee'); }
 catch(e){ ok('echeance depassee : la diffusion abandonne au lieu d\'epuiser les essais'); }
-(tentatives<=1) ? ok('une seule tentative apres l\'echeance, pas quatre ('+tentatives+')') : ko('tentatives inutiles : '+tentatives);
+(tentatives<=1) ? ok('une seule tentative apres l\'echeance, pas six ('+tentatives+')') : ko('tentatives inutiles : '+tentatives);
+/* Un reseau mobile lent ne doit pas condamner l'endpoint : l'echeance se juge
+   avant marquerRpcMort, sinon un `failed to fetch` tardif tuait Helius. */
+(!RPC_MORTS[CHAINE.rpc]) ? ok('echeance depassee : l\'endpoint n\'est pas ecarte a tort') : ko('RPC CONDAMNE par un reseau lent : la session finit sur le RPC officiel');
 (Date.now()-t0d < 1500) ? ok('abandon immediat ('+(Date.now()-t0d)+' ms), le joueur est prevenu tout de suite') : ko('trop lent');
 (/expir/.test(causeLisible(new Error('blockhash not found : echeance depassee'))))
   ? ok('message : "'+causeLisible(new Error('blockhash not found : echeance depassee'))+'"') : ko('message obscur');
@@ -223,6 +226,14 @@ catch(e){ ok('echeance depassee : la diffusion abandonne au lieu d\'epuiser les 
 tentatives=0;
 try{ await diffuser(new Uint8Array([1])); }catch(e){}
 (tentatives>=2) ? ok('sans echeance : les reprises 429 fonctionnent toujours ('+tentatives+' tentatives)') : ko('reprises cassees : '+tentatives);
+
+/* Le garde d'abandon doit suivre la convention du fichier, pas une valeur
+   litterale : walletType recoit res.type du connecteur ('phantom', etc.). */
+const srcW=require('fs').readFileSync(require('path').join(__dirname,'../game/index_v37.html'),'utf8');
+(srcW.indexOf("!(await amorcerWallet()) && S.walletType==='ext'")<0)
+  ? ok('garde d\'abandon : plus de test sur la valeur litterale ext') : ko('garde muet si walletType vaut autre chose que ext');
+((srcW.match(/!\(await amorcerWallet\(\)\) && S\.walletType!=='mwa'/g)||[]).length===3)
+  ? ok('les 3 points d\'envoi utilisent la convention !== mwa') : ko('convention incoherente entre les points d\'envoi');
 
 /* ---- 7. Timeout : le message depend de qui diffuse ---- */
 CHAINE.canalAuto=false;

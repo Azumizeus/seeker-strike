@@ -135,8 +135,8 @@ tranche de 10 secondes. En enchaînant les envois, un joueur recevait
 
 | Mesure | Effet |
 |---|---|
-| Blockhash mis en cache, fenêtre adaptative (`blockhashFrais(marge)`) | Le cache n'est servi que si le blockhash survivra à l'attente de signature. **Sur le chemin d'envoi la marge est telle que la fenêtre utile tombe à zéro : chaque envoi signé repart d'un blockhash frais.** C'est assumé — voir plus bas. |
-| Reprise avec attente croissante + bascule de RPC | Sur un 429 : attente 0,8 s → 1,6 s → 2,4 s, bascule sur l'endpoint suivant du pool, 4 tentatives avant abandon |
+| Blockhash mis en cache, fenêtre adaptative (`blockhashFrais(marge)`) | Le cache n'est servi que si le blockhash survivra à l'attente de signature. **Sur le chemin d'envoi la fenêtre utile tombe à 2 s : en pratique chaque envoi signé repart d'un blockhash frais.** C'est assumé — voir plus bas. |
+| Reprise avec attente croissante + bascule de RPC | Sur un 429 : attente 0,8 s → 1,6 s → 2,4 s, bascule sur l'endpoint suivant du pool, `max(4, nb_endpoints+2)` tentatives avant abandon (6 avec le pool actuel) |
 | Délai de 20 s entre deux lots (`DELAI_LOT`) | Le bouton affiche `PATIENTE 14s` en compte à rebours au lieu de partir dans le mur |
 
 `causeLisible()` traduit désormais toute erreur technique en une phrase
