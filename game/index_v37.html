@@ -641,7 +641,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
       <div class="rond"><span id="ico-carte"></span></div>
       <div style="flex:1;min-width:0">
         <b style="color:#14F195">CARTE DE CAMPAGNE</b>
-        <small id="home-progression">22 secteurs &bull; 7 boss</small>
+        <small id="home-progression">22 secteurs &bull; 10 boss</small>
       </div>
       <span style="color:#14F195;font-size:16px">&#9656;</span>
     </button>
@@ -2218,8 +2218,8 @@ const REGLES=[
   "il se gagne ou s'ach\u00e8te en dehors du jeu.<br><br>"+
   "<span style='color:#fbbf24'>Tout se joue sur le devnet \u2014 aucune valeur r\u00e9elle engag\u00e9e.</span>"},
  {p:'\u26d3\ufe0f', t:'SEEKER TASK', d:
-  "<b>15 transactions on-chain</b> pour maximiser ton activit\u00e9 Solana, "+
-  "en vue de l'airdrop <b>SKR de Solana Mobile</b>.<br><br>"+
+  "<b>15 transactions on-chain</b> pour prouver ton activit\u00e9 Solana "+
+  "depuis ton <b>Seeker</b>, v\u00e9rifiables sur Solscan.<br><br>"+
   "Chaque claim quotidien, achat ou d\u00e9blocage envoie une transaction sign\u00e9e par ton wallet. "+
   "Le compteur affiche les transactions <b>r\u00e9ellement confirm\u00e9es</b>."}
 ];
@@ -2613,7 +2613,7 @@ const TUTO=[
   {p:'\ud83d\udca5', t:'TIRER', d:"Le tir part tout seul, en continu. Tu n'as aucun bouton \u00e0 presser.\n\nTout se joue au placement : coupe les lignes de tir, contourne les boucliers, ne reste jamais immobile."},
   {p:'\ud83d\udee1\ufe0f', t:'CONNA\u00ceTRE L\u2019ENNEMI', d:"Chaque unit\u00e9 a un comportement fixe : le kamikaze fonce, le t\u00e9l\u00e9porteur appara\u00eet derri\u00e8re toi, le porteur de bouclier renvoie les tirs de face.\n\nLe Bestiaire les d\u00e9crit tous."},
   {p:'\u2b50', t:'DIFFICULT\u00c9 ET \u00c9TOILES', d:"Chaque n\u0153ud se joue en Normal, Difficile ou Extr\u00eame. Plus dur = jusqu'\u00e0 3,2\u00d7 de r\u00e9compenses.\n\nUn n\u0153ud termin\u00e9 reste rejouable : seule ta meilleure \u00e9toile compte."},
-  {p:'\ud83c\udfaf', t:'OBJECTIF', d:"22 secteurs, 2 campagnes. Bats le Vortex puis la Corruption pour ouvrir la route du Nexus, qui referme GENESIS. Au-del\u00e0 commence CHAOS PROTOCOL.\n\n15 transactions te rendent \u00e9ligible \u00e0 l'airdrop SKR."}
+  {p:'\ud83c\udfaf', t:'OBJECTIF', d:"22 secteurs, 2 campagnes. Bats le Vortex puis la Corruption pour ouvrir la route du Nexus, qui referme GENESIS. Au-del\u00e0 commence CHAOS PROTOCOL.\n\n15 transactions on-chain sign\u00e9es par ton wallet : ton activit\u00e9 Solana, prouv\u00e9e depuis ton Seeker."}
 ];
 let _tutoIdx=0;
 function ouvrirTuto(){ _tutoIdx=0; document.getElementById('tuto').classList.add('on'); majTuto(); }
@@ -6838,7 +6838,7 @@ const EN = {
 "GC &bull; CRÉDITS": "GC &bull; CREDITS",
 "MISSIONS": "MISSIONS",
 "CARTE DE CAMPAGNE": "CAMPAIGN MAP",
-"22 secteurs • 7 boss": "22 sectors • 10 bosses",
+"22 secteurs • 10 boss": "22 sectors • 10 bosses",
 "INFINI": "ENDLESS",
 "Tiens le plus longtemps": "Survive as long as you can",
 "ARENA": "ARENA",
@@ -7453,7 +7453,7 @@ const EN = {
 "🔫 <b>Mitrailleuse</b> — cadence extrême 18 s<br>☢️ <b>Bombe</b> — nettoie l'écran<br>👻 <b>Fantôme</b> — escorte de 2 alliés, 22 s<br><br>Utilisables <b>en pleine partie</b>, autant de fois que tu as de charges.": "🔫 <b>Minigun</b> — extreme fire rate 18s<br>☢️ <b>Bomb</b> — clears the screen<br>👻 <b>Ghost</b> — escort of 2 allies, 22s<br><br>Usable <b>mid-run</b>, as often as you have charges.",
 "<b>♾️ Infini</b> — vagues sans fin, mini-boss tous les 5 tours.<br><br><b>⚔️ Arena</b> — défi quotidien, le même pour tous. Bonus de 50 % si tu tiens le temps.<br><br><b>🤖 Arena Coop</b> — un wingman IA combat à tes côtés. Qui fera le plus de kills ?": "<b>♾️ Endless</b> — endless waves, a mini-boss every 5 rounds.<br><br><b>⚔️ Arena</b> — daily challenge, the same for everyone. 50% bonus if you last the distance.<br><br><b>🤖 Co-op Arena</b> — an AI wingman fights at your side. Who gets the most kills?",
 "<b>GC (Genesis Credits)</b> — la monnaie du jeu. Gagnée <b>uniquement en jouant</b>. Ne s'achète pas, n'existe pas sur la blockchain.<br><br>Tu commences avec <b>900 GC</b> : de quoi t'équiper d'un consommable dès la première partie. Le GC paie la boutique, les munitions et les consommables — tout le gameplay.<br><br><b>SOL</b> et <b>SKR</b> — ce sont <b>tes</b> tokens. Le jeu ne t'en donne jamais et n'y touche jamais sans ta signature. Ils servent uniquement à acheter des vaisseaux, au choix, à raison d'environ <b>1 SOL = 25 000 SKR</b>. Six vaisseaux sont payants ; cinq autres se méritent en jeu et ne coûtent rien.<br><br>Le <b>SKR</b> est le token officiel de <b>Solana Mobile</b>. Le jeu n'en distribue pas : il se gagne ou s'achète en dehors du jeu.<br><br><span style='color:#fbbf24'>Tout se joue sur le devnet — aucune valeur réelle engagée.</span>": "<b>GC (Genesis Credits)</b> — the in-game currency. Earned <b>by playing only</b>. Cannot be bought, does not exist on-chain.<br><br>You start with <b>900 GC</b>: enough for one consumable on your very first run. GC pays for the shop, ammo and consumables — all of the gameplay.<br><br><b>SOL</b> and <b>SKR</b> — these are <b>your</b> tokens. The game never gives you any and never touches them without your signature. They only buy ships, your choice of either, at roughly <b>1 SOL = 25,000 SKR</b>. Six ships are paid; five more are earned in game and cost nothing.<br><br><b>SKR</b> is the official <b>Solana Mobile</b> token. The game does not distribute it: you earn it or buy it outside the game.<br><br><span style='color:#fbbf24'>Everything runs on devnet — no real value at stake.</span>",
-"<b>15 transactions on-chain</b> pour maximiser ton activité Solana, en vue de l'airdrop <b>SKR de Solana Mobile</b>.<br><br>Chaque claim quotidien, achat ou déblocage envoie une transaction signée par ton wallet. Le compteur affiche les transactions <b>réellement confirmées</b>.": "<b>15 on-chain transactions</b> to maximise your Solana activity, with the <b>Solana Mobile SKR</b> airdrop in mind.<br><br>Each tap sends a memo transaction signed by your wallet. The counter shows <b>confirmed</b> transactions only.",
+"<b>15 transactions on-chain</b> pour prouver ton activité Solana depuis ton <b>Seeker</b>, vérifiables sur Solscan.<br><br>Chaque claim quotidien, achat ou déblocage envoie une transaction signée par ton wallet. Le compteur affiche les transactions <b>réellement confirmées</b>.": "<b>15 on-chain transactions</b> to prove your Solana activity from your <b>Seeker</b>, verifiable on Solscan.<br><br>Each tap sends a memo transaction signed by your wallet. The counter shows <b>confirmed</b> transactions only.",
 "échoué": "failed",
 "intact": "clean",
 "aucun": "none",
@@ -8502,7 +8502,7 @@ function reclamerQuete(id){
   if((S.quetesReclamees||[]).includes(id)) return toast('D\u00e9j\u00e0 r\u00e9clam\u00e9');
   S.quetesReclamees=(S.quetesReclamees||[]).concat(id);
   S.skr+=q.skr;   /* les quetes ne versent que des credits */
-  if(q.sp) toast('\ud83c\udf89 \u00c9LIGIBLE \u00c9LIGIBILIT\u00c9 AIRDROP \u2022 +'+q.skr+' GC',3800);
+  if(q.sp) toast('\ud83c\udf89 '+q.n+' \u2022 activit\u00e9 Solana prouv\u00e9e \u2022 +'+q.skr+' GC',3800);
   else if(q.palier) toast('\ud83d\udd13 '+q.n+' \u2022 '+q.palier.recompense+' \u2022 +'+q.skr+' GC', 4400);
   else toast('\u2705 '+q.n+' \u2022 +'+(q.sol?q.sol+' SOL ':'')+'+'+q.skr+' GC',3000);
   Audio2.jouerSfx('levelup'); haptique('victoire');
