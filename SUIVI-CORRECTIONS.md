@@ -15,8 +15,11 @@ correction — on garde la trace.
 
 **Statut** — `à faire` · `en cours` · `fait` · `à vérifier` · `abandonné`
 
-> ⚠️ **Après chaque correction :** `cd tests && bash run.sh`, puis
-> `cd game && python3 build_autonome.py`, puis `bash publier.sh "message"`.
+> ⚠️ **Après chaque correction, dans CET ordre :**
+> `cd game && python3 build_autonome.py` → `cd tests && bash run.sh` → `bash publier.sh "message"`.
+> Construire **avant** de tester : la suite valide les 3 builds, et sans reconstruction
+> deux d'entre eux sont encore les anciennes copies. `publier.sh` refuse de publier
+> si le build est plus vieux que la source — c'est voulu.
 > Sans le build, tu corriges la source et tu publies l'ancienne version.
 > Depuis le 13/08, `publier.sh` met à jour **GitHub Pages ET Netlify** d'un coup.
 
@@ -33,6 +36,9 @@ correction — on garde la trace.
 | `TXT-6` | Badge « ÉLIGIBLE » → **« Badge SEEKER »** + traduction EN réalignée | `3daf028` |
 | `PUB-2` | **Netlify connecté au dépôt GitHub** (branche `main`, build vide, publish `.`). Il se met à jour tout seul maintenant | — |
 | `PRJ-3a` | `.gitignore` complété : `*.avant-*`, `.DS_Store`, `revue-assets test.csv` | `29f2e00` |
+| `TXT-7` | **10 boss** dans `SOUMISSION.md` (×3), `KIT-COMM-X.md` (×2), `TESTER-SUR-SEEKER.md`. Les 12 tweets revérifiés < 280 car. | `ac50fac` |
+| `TXT-8` | Badge `air-badge` : « ✅ ÉLIGIBLE » → **« ✅ VÉRIFIÉ »** + i18n `"✅ VERIFIED"`. Dernier reste visible du discours airdrop. | `ac50fac` |
+| `PRJ-5` | **`publier.sh` ne fait plus `git add -A`** → `git add index.html` + `git add -u`. Plus de fichier de travail embarqué par accident. | `ac50fac` |
 
 **Vérification faite à chaque fois :** extraction du bloc script inline + `node --check`
 → syntaxe OK. La suite de 118 tests n'a pas pu tourner jusqu'au bout via le pont
@@ -47,14 +53,7 @@ correction — on garde la trace.
 `docs/SOUMISSION.md` écrit *« Built solo in 6 days »*. Tu dis 5 partout ailleurs.
 Choisis-en un et aligne tout : soumission, README, posts X, bio.
 
-### `TXT-7` 🟠 Tes docs publics disent encore « 7 bosses » — **à faire**
-
-Maintenant qu'on sait que c'est **10** :
-
-- `docs/SOUMISSION.md` → « 7 bosses » et « 7 boss »
-- `KIT-COMM-X.md` → tweet 2 des deux threads (je l'avais copié de ta soumission)
-
-Tu sous-vends ton jeu de 3 boss. À corriger **avant** de publier les threads.
+*(`TXT-7` fermé — voir le tableau du haut.)*
 
 ---
 
@@ -152,7 +151,7 @@ Tu sous-vends ton jeu de 3 boss. À corriger **avant** de publier les threads.
 | `PRJ-2` | 🟡 | Trier les assets et sprites non utilisés (`_backup/`, `sources/`). Les classer, pas les jeter. | à faire |
 | `PRJ-3b` | ⚪ | Restent `docs/_test.tmp` et `docs/_test.txt`. Doublon `.DS_Store` dans le `.gitignore`. | à faire |
 | `PRJ-4` | 🟡 | **`CLAUDE.md` périmé** : dit « v3.5 » (le jeu est en v4.4), « prochaine tâche : test du 13 août » (passé), note `ss_v2` fausse. | à faire |
-| `PRJ-5` | 🟡 | **`publier.sh` fait `git add -A`** — il réintègre tout fichier non ignoré. Cause racine des fichiers de travail commités par erreur. | connu |
+| `PRJ-5` | 🟡 | ~~`publier.sh` fait `git add -A`~~ | **fait** |
 
 ---
 
