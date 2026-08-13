@@ -25,3 +25,5 @@ game/assets_opt/
 # Fichiers temporaires
 *.tmp
 docs/_test.*
+*.avant-*
+.DS_Store
