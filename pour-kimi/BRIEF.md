@@ -1,58 +1,85 @@
-# Faire tourner Seeker Strike dans la preview Noah
+# Brief — faire tourner Seeker Strike dans la preview Noah
 
-**Situation** : la candidature au hackathon NoahAI Nitro 01 se fait en
-soumettant le projet Noah lui-même. Les organisateurs ouvrent le workspace.
-**La preview doit donc afficher le jeu.** Ce n'est pas un confort, c'est le
-livrable.
-
-**État** : le jeu est fini, testé (118 exécutions), déployé et fonctionnel.
-Seul l'affichage dans la preview Noah échoue — écran noir, sans message.
-
-**Deadline** : 13 août 2026, 18 h 00 (Europe/Paris).
+**Pour : Kimi K3, ou tout agent qui reprend le dossier.**
+**Écrit le 13 août 2026, 04 h 10. Deadline : aujourd'hui 18 h 00 (Europe/Paris).**
 
 ---
 
-## Le jeu
+## 1. La situation en cinq lignes
 
-Shoot'em up vertical, **Canvas 2D en JavaScript vanilla, fichier unique**.
-Aucun framework, aucune dépendance npm, aucun build.
+Le jeu **est fini**. Il tourne, il est testé (118 exécutions au vert), déployé,
+et ses transactions Solana sont réelles et vérifiables sur Solscan.
+
+**Le seul problème** : il ne s'affiche pas dans la preview de la plateforme
+Noah. Écran noir, aucun message. Or la candidature se fait en soumettant le
+projet Noah lui-même — les organisateurs ouvrent le workspace. **Si la preview
+est noire, il n'y a pas de candidature.**
+
+Ce n'est pas un problème de jeu. C'est un problème d'intégration.
+
+---
+
+## 2. Le hackathon
+
+**NoahAI Nitro 01 — Solana Gaming.** 7 au 13 août 2026.
+Prix : 1 000 USDC (500 / 300 / 200).
+
+Soumission : « Choose your project, describe it, and enter the hackathon » —
+on choisit un projet Noah, on le décrit, on valide. **Un seul projet par
+participant.** Fournis aussi : description, Twitter, Telegram.
+
+---
+
+## 3. Le jeu
+
+**Seeker Strike — Genesis Protocol.** Shoot'em up vertical pour Solana Seeker.
+**Canvas 2D en JavaScript vanilla, fichier unique.** Aucun framework, aucune
+dépendance npm, aucun build.
 
 | Ressource | Adresse |
 |---|---|
-| Jouable | https://azumizeus.github.io/seeker-strike/ |
-| Code | https://github.com/Azumizeus/seeker-strike |
+| Jouable, en ligne | https://azumizeus.github.io/seeker-strike/ |
+| Dépôt | https://github.com/Azumizeus/seeker-strike |
 | Source de vérité | `game/index_v37.html` — 2,88 Mo |
-| Build autonome | `index.html` racine — 11 Mo, tout embarqué |
+| Build autonome | `index.html` à la racine — 11 Mo, tout embarqué |
 
-**Le jeu fonctionne.** Vérifiable en ouvrant la première URL. Le problème est
-uniquement son intégration dans l'environnement Noah.
+22 secteurs, 7 boss, 2 campagnes, 14 vaisseaux, FR/EN, wallet Solana
+(Seed Vault / Phantom / Backpack), 15 transactions mémo en une signature,
+10 paliers on-chain.
+
+**Vérification immédiate** : ouvrir la première URL. Le jeu se lance.
 
 ---
 
-## L'environnement Noah, ce qu'on en sait
+## 4. L'environnement Noah — ce qu'on sait
 
 - Il fait tourner **son propre projet React + Vite + TypeScript**
-- L'agent peut **lire, écrire, modifier** des fichiers texte du projet
-  (`src/App.tsx`, `vite.config.ts` — testé, ça marche)
-- Il **ne peut pas** écrire un fichier de 11 Mo, ni télécharger par `curl`
-- Il dit ne pouvoir écrire dans le dépôt « que des images »
-- Il **n'exécute pas** le projet lui-même : il lit le dépôt distant par HTTP
+- L'agent **lit, écrit et modifie** les fichiers texte du projet
+  (`src/App.tsx`, `vite.config.ts` — confirmé)
+- Il **ne peut pas** écrire un fichier de plusieurs Mo
+- Il **ne peut pas** lancer `curl`
+- Il lit le dépôt distant par HTTP
+- **Quota : 30 millions de tokens.** Contrainte majeure : toute solution
+  coûteuse en texte risque de l'épuiser avant d'aboutir.
 
 ### Ce qui a été tenté, et a échoué
 
 | Tentative | Résultat |
 |---|---|
 | `<iframe src="https://azumizeus.github.io/seeker-strike/">` | écran noir |
-| Proxy Vite `/jeu` → GitHub Pages | écran noir |
+| Proxy Vite `/jeu` vers GitHub Pages | écran noir |
 | `curl` du fichier dans `public/` | impossible pour l'agent |
-| `fetch` + Blob même origine | non testé au moment d'écrire |
+| `fetch` + Blob (même origine) | à confirmer |
+
+**Personne n'a encore diagnostiqué la cause de l'écran noir.** Toutes les
+tentatives ont visé des causes supposées.
 
 ---
 
-## LA question à trancher en premier
+## 5. LA question à trancher en premier
 
-**Aucune solution ne peut être choisie sans cette réponse.** Faire mettre ceci
-dans `src/App.tsx` :
+Dix secondes, et elle décide de toute la suite. Faire remplacer
+`src/App.tsx` par exactement ceci :
 
 ```tsx
 export default function App() {
@@ -61,104 +88,117 @@ export default function App() {
 }
 ```
 
-| Résultat | Diagnostic | Solution |
+| Résultat | Diagnostic | Aller à |
 |---|---|---|
-| example.com s'affiche | les iframes marchent, le réseau sort | **Solution A** |
-| écran noir | iframes ou réseau bloqués dans la preview | **Solution B** |
+| example.com s'affiche | iframes et réseau OK | **Solution A** |
+| écran noir | iframes bloquées dans la preview | **Solution B** |
 
-Ne pas sauter cette étape. Trois heures ont été perdues à corriger des causes
-supposées.
-
----
-
-## Solution A — le jeu chargé, servi en même origine
-
-Si les iframes fonctionnent. Fichier prêt dans le dépôt :
-`integration-react/App.tsx`.
-
-Principe : `fetch` du jeu depuis GitHub Pages (qui envoie
-`access-control-allow-origin: *`), puis affichage depuis un **Blob**. L'iframe
-est alors en **même origine** que la preview, ce qui lève la restriction sur
-l'ouverture du wallet.
-
-Le composant **affiche l'erreur exacte** en cas d'échec au lieu de rester noir,
-et retombe sur l'iframe directe en mode dégradé.
+**Ne pas sauter cette étape.** Six heures ont été perdues faute de l'avoir
+faite.
 
 ---
 
-## Solution B — le jeu écrit dans le projet, sans réseau
+## 6. Solution A — plugin Vite (à essayer en premier)
 
-Si les iframes ou le réseau sont bloqués. C'est le contenu de ce dossier.
+**Coût : deux petits fichiers. Quelques centaines de tokens.**
 
-`game/index_v37.html` est découpé en **17 morceaux de 175 Ko**, chacun
-écrivable par l'agent :
+Le téléchargement se fait **côté serveur Node**, au démarrage de Vite. Donc ni
+CORS, ni restriction d'iframe, ni réseau navigateur.
+
+Dans `vite.config.ts` :
+
+```ts
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+
+function seekerStrike() {
+  return {
+    name: 'seeker-strike',
+    async configureServer() {
+      if (existsSync('public/seeker-strike.html')) return;
+      mkdirSync('public', { recursive: true });
+      const r = await fetch('https://azumizeus.github.io/seeker-strike/');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      writeFileSync('public/seeker-strike.html', await r.text());
+      console.log('[seeker] jeu telecharge');
+    },
+  };
+}
+```
+
+Puis l'ajouter aux plugins : `plugins: [react(), seekerStrike()]`
+
+Et `src/App.tsx` :
+
+```tsx
+export default function App() {
+  return <iframe src="/seeker-strike.html"
+    style={{position:'fixed',inset:0,width:'100%',height:'100%',border:0}} />;
+}
+```
+
+**Pourquoi c'est la meilleure option** : le fichier atterrit dans `public/`,
+Vite le sert en statique, l'iframe est en **même origine** — donc le wallet
+fonctionne aussi dans la preview. Et si le `fetch` Node échoue, l'erreur
+apparaît dans les logs du serveur, pas dans un écran noir muet.
+
+---
+
+## 7. Solution B — le jeu écrit morceau par morceau
+
+**Coût : environ 3 Mo de texte, soit ~1 million de tokens minimum.**
+**À n'utiliser que si A échoue.** Risque réel d'épuiser le quota Noah.
+
+Le jeu est découpé en **17 morceaux de 175 Ko**, dans le dépôt :
 
 ```
-partie-01.txt … partie-17.txt     les morceaux, dans l'ordre
-reassembler.py                    les recolle en index.html
+pour-kimi/partie-01.txt … partie-17.txt
+pour-kimi/reassembler.py
+```
+
+Accessibles en lecture directe, ce qui évite tout copier-coller :
+
+```
+https://raw.githubusercontent.com/Azumizeus/seeker-strike/main/pour-kimi/partie-01.txt
 ```
 
 ### Marche à suivre
 
-1. L'agent écrit les 17 fichiers dans `public/jeu/` du projet React.
-   Le contenu de chacun est dans ce dépôt, à `pour-kimi/partie-NN.txt`.
-2. Concaténer, **dans l'ordre numérique**, en `public/seeker-strike.html`.
-   Soit avec `reassembler.py`, soit directement en TypeScript.
-3. Pointer l'iframe sur `/seeker-strike.html` (même origine, servi par Vite
-   depuis `public/` sans passer par le bundler).
+1. Lire chaque morceau depuis l'URL brute, l'écrire dans `public/jeu/`
+2. Concaténer **dans l'ordre numérique** en `public/seeker-strike.html`
+3. Pointer l'iframe sur `/seeker-strike.html`
 
-### Attention : les assets
+### Attention aux assets
 
 `index_v37.html` référence des fichiers externes en chemins **relatifs** :
+`assets/inline/*.webp` (104 images), `assets/audio/*.mp3` (8 pistes).
 
-```
-assets/inline/*.webp     104 images
-assets/audio/*.mp3       8 pistes
-```
-
-Deux façons de les fournir :
-
-**B1 — assets en absolu** (léger, demande le réseau)
 Remplacer dans le HTML reconstitué :
+
 ```
-assets/   →   https://azumizeus.github.io/seeker-strike/assets/
+assets/   vers   https://azumizeus.github.io/seeker-strike/assets/
 ```
-Une ligne de `replace`. Suppose que le réseau sortant fonctionne.
 
-**B2 — sans assets** (aucun réseau, dégradé)
-Le jeu tourne sans : le chargeur est tolérant (`0 echecs` attendus mais les
-absences ne bloquent pas). Les sprites manquent, le rendu vectoriel de secours
-prend le relais pour les projectiles. **À vérifier visuellement avant de
-retenir cette voie.**
-
-**B3 — assets embarqués** (le plus sûr, le plus lourd)
-Utiliser le build autonome de 11 Mo au lieu de la source : tout est en base64,
-aucun asset externe. 63 morceaux de 175 Ko au lieu de 17. Le fichier est
-`index.html` à la racine du dépôt. À découper avec le même script.
+Si le réseau navigateur est bloqué, ces assets ne chargeront pas : le jeu se
+lance mais les sprites manquent — inacceptable pour une candidature. Dans ce
+cas, découper le build autonome de 11 Mo (63 morceaux), qui n'a besoin
+d'aucun asset externe.
 
 ---
 
-## Ordre recommandé
+## 8. Ce qu'il ne faut pas faire
 
-1. **Test `example.com`** — dix secondes, décide de tout.
-2. Si iframes OK → **Solution A**, cinq minutes.
-3. Sinon → **Solution B1**, puis B3 si le réseau est aussi bloqué.
-
----
-
-## Ce qu'il ne faut pas faire
-
-- Découper le jeu en modules JavaScript, le convertir en React ou TypeScript.
-  C'est un Canvas 2D de 8 200 lignes, l'architecture mono-fichier est
-  délibérée, et il ne reste pas le temps.
-- Le faire passer par un bundler. 2,4 Mo de script inline : au mieux très
-  lent, au pire un échec.
-- Modifier le code du jeu. Il est testé, 118 exécutions au vert. Le problème
-  est l'environnement, pas le jeu.
+- **Ne pas convertir le jeu en React ou TypeScript.** 8 200 lignes de Canvas
+  2D, architecture mono-fichier délibérée. Hors sujet et hors délai.
+- **Ne pas le faire passer par un bundler.** 2,4 Mo de script inline : au
+  mieux très lent, au pire un échec.
+- **Ne pas modifier le code du jeu.** 118 tests au vert. Le problème est
+  l'environnement.
+- **Ne pas relancer d'audit de code.** Cinq audits déjà faits, tous les
+  défauts corrigés. Ce qui reste n'est pas noté.
 
 ---
 
-## Vérifier que ça marche
+## 9. Vérifier que ça marche
 
 Console du navigateur, au chargement :
 
@@ -169,6 +209,32 @@ Console du navigateur, au chargement :
 
 À l'écran : splash noir, « SEEKER STRIKE », « APPUYER POUR COMMENCER ».
 En bas des réglages : `Genesis Protocol v4.4`.
+
+---
+
+## 10. Si rien ne fonctionne avant 18 h
+
+**Soumettre quand même.** Le projet Noah existe, la description peut pointer
+vers l'URL jouable et le dépôt. Un projet soumis avec une preview imparfaite
+vaut infiniment mieux qu'aucune soumission.
+
+Le jeu est réel : 5 jours de travail, 118 tests, des transactions Solana
+signées et vérifiables sur Solscan depuis un Seeker.
+
+---
+
+## 11. Outils du dépôt
+
+| Commande | Effet |
+|---|---|
+| `bash publier.sh "message"` | régénère, commit, push, met à jour GitHub Pages |
+| `bash verifier.sh` | vérifie que l'URL en ligne sert la dernière version |
+| `cd tests && ./run.sh` | 118 exécutions, attendu : `TOUT PASSE` |
+| `cd game && python3 build_autonome.py` | régénère le build 11 Mo |
+
+Documentation : `docs/BRIEF-NOAH.md` (déploiement),
+`docs/BRIEF-KIMI-K3.md` (architecture du jeu),
+`docs/JOURNAL-MODIFS.md` (historique des correctifs).
 
 ---
 
