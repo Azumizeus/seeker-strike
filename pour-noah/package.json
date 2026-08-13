@@ -1,0 +1,12 @@
+{
+  "name": "seeker-strike",
+  "version": "4.4.0",
+  "private": true,
+  "description": "Seeker Strike — Genesis Protocol : shoot'em up pour Solana Seeker",
+  "scripts": {
+    "dev": "npx --yes serve . -l 3000",
+    "start": "npx --yes serve . -l 3000",
+    "preview": "npx --yes serve . -l 3000",
+    "build": "echo 'Rien a construire : index.html est autonome.'"
+  }
+}
