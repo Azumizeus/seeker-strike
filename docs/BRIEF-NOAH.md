@@ -196,6 +196,12 @@ automatisés vérifient la logique, pas le ressenti ni le rendu.
 
 - [ ] Premier lancement : choix de langue, puis tutoriel
 - [ ] Connexion Phantom, envoi des 15 TX, vérification sur Solscan
+- [ ] **Envoi lancé, puis attendre 40 s avant de signer** : la transaction doit
+      passer, pas expirer. Personne ne teste ça spontanément — on signe toujours
+      vite quand on teste soi-même — et c'est le seul moyen de vérifier sur un
+      vrai appareil que le budget de temps du blockhash tient.
+- [ ] Envoi lancé, puis fermer le wallet sans signer : au bout de 45 s le jeu
+      doit rendre la main avec un message, pas rester bloqué
 - [ ] Deux envois d'affilée : le second attend bien 20 s, compte à rebours visible
 - [ ] Rechargement de page, nouvel envoi sans reconnexion manuelle
 - [ ] Achat d'un vaisseau en SOL

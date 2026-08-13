@@ -164,6 +164,89 @@ relecture extérieure.
 
 ---
 
+## Suite de l'échange — tes trois points résiduels
+
+### Point 1 — Faux positif, `canalAuto` est bien réinitialisé
+
+```
+$ grep -n 'canalAuto' game/index_v37.html
+3441:    return CHAINE.canalAuto
+3524:  CHAINE.canalAuto = false;          ← en tete de signerEtEnvoyer
+3534:      CHAINE.canalAuto = false;      ← signTransaction
+3539:      CHAINE.canalAuto = true;       ← signAndSendTransaction
+3544:      CHAINE.canalAuto = true;       ← request
+3568:    CHAINE.canalAuto = true;         ← Seed Vault
+```
+
+Ligne 3524, avant toute affectation. Le scénario que tu décris — Seed Vault
+puis extension, message trompeur — ne peut pas se produire. C'est maintenant
+asserté dans les tests, en vérifiant l'ordre des positions dans la source :
+
+```
+ok  canalAuto remis a false en tete de signerEtEnvoyer, avant toute affectation
+```
+
+### Point 2 — Réel. Appliqué.
+
+Tu as raison, et c'est le genre d'oubli qui ne se voit qu'en additionnant les
+budgets à la main. La marge couvrait la signature mais pas ce qui suit.
+
+```js
+/* Ce qui s'ecoule APRES la signature, avant que la transaction n'atteigne le
+   reseau : reprises de diffusion (0,8 + 1,6 + 2,4 s) et allers-retours. Sans
+   cette part, le budget etait juste... sauf quand le RPC sature, c'est-a-dire
+   exactement le cas pour lequel `diffuser()` existe. */
+const DELAI_DIFFUSION = 7000;
+```
+
+```js
+const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
+```
+
+### Point 3 — Pris aussi, c'était gratuit
+
+`BH_VIE` passe de 60 à **55 s**. Les 150 blocs courent depuis la création du
+blockhash, pas depuis notre `fetch`.
+
+### Conséquence : la fenêtre tombe à 3 s, et c'est assumé
+
+Avec `BH_VIE=55`, `DELAI_SIGNATURE=45` et `DELAI_DIFFUSION=7`, la fenêtre
+utilisable est de 3 s, pas les 8 s que tu annonçais.
+
+J'ai envisagé de descendre `DELAI_SIGNATURE` à 40 s pour récupérer ces 8 s.
+J'ai tranché contre : entre économiser des appels RPC et laisser un juge qui
+découvre l'interface prendre son temps, le joueur passe d'abord. Couper à 40 s
+une signature qui serait arrivée à 42 s serait un échec bien pire qu'un appel
+RPC supplémentaire — d'autant qu'avec Helius le quota n'est plus un sujet.
+
+Le cache n'a donc plus qu'un rôle : absorber un double appui, qui dure moins
+d'une seconde. Il le fait. C'est écrit dans le code pour que personne ne
+« corrige » cette valeur en croyant bien faire.
+
+```
+ok  duree de vie prudente : 55 s (le blockhash arrive deja vieux de 1 a 3 s)
+ok  budget de diffusion pris en compte : 7 s (reprises 429 + reseau)
+ok  fenetre de cache utile avant signature : 3 s
+ok  assez large pour absorber un double appui (< 1 s)
+ok  pire cas : 55 s <= 55 s, la TX ne peut pas arriver perimee
+```
+
+### Ton item de checklist
+
+Ajouté à `docs/BRIEF-NOAH.md`, avec la raison — sinon personne ne comprendra
+pourquoi on demande d'attendre :
+
+> - [ ] **Envoi lancé, puis attendre 40 s avant de signer** : la transaction
+>       doit passer, pas expirer. Personne ne teste ça spontanément — on signe
+>       toujours vite quand on teste soi-même — et c'est le seul moyen de
+>       vérifier sur un vrai appareil que le budget de temps tient.
+> - [ ] Envoi lancé, puis fermer le wallet sans signer : au bout de 45 s le jeu
+>       doit rendre la main avec un message, pas rester bloqué.
+
+Le second couvre le wallet muet du même coup.
+
+---
+
 ## État
 
 ```

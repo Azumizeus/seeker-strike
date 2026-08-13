@@ -106,12 +106,23 @@ LANGUE='fr';
 /* Ce qui compte n'est pas BH_FENETRE seule, mais la fenetre REELLEMENT
    utilisable une fois la signature deduite : blockhashFrais(marge) refuse de
    servir un blockhash qui n'y survivrait pas. */
-const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE);
+const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION);
 (fenetreUtile > 0)
   ? ok('fenetre de cache utile avant signature : '+(fenetreUtile/1000)+' s (le cache sert encore aux envois rapproches)')
   : ko('BUDGET NUL : signature '+(DELAI_SIGNATURE/1000)+' s >= vie du blockhash '+(BH_VIE/1000)+' s, plus aucun cache possible');
-(fenetreUtile >= 10000)
-  ? ok('assez large pour absorber un double appui et une rafale') : ko('fenetre trop courte : '+(fenetreUtile/1000)+' s');
+/* La fenetre est volontairement courte : entre economiser des appels RPC et
+   laisser le joueur signer tranquillement, on choisit le joueur. Le cache ne
+   sert plus qu'a absorber un double appui, qui dure moins d'une seconde. */
+(fenetreUtile >= 2000)
+  ? ok('assez large pour absorber un double appui (< 1 s)') : ko('fenetre trop courte : '+(fenetreUtile/1000)+' s');
+(typeof DELAI_DIFFUSION==='number' && DELAI_DIFFUSION>=5000)
+  ? ok('budget de diffusion pris en compte : '+(DELAI_DIFFUSION/1000)+' s (reprises 429 + reseau)') : ko('DELAI_DIFFUSION absent ou trop court');
+(BH_VIE<=55000)
+  ? ok('duree de vie prudente : '+(BH_VIE/1000)+' s (le blockhash arrive deja vieux de 1 a 3 s)') : ko('BH_VIE optimiste : '+(BH_VIE/1000)+' s');
+/* Le pire cas complet doit tenir */
+(fenetreUtile + DELAI_SIGNATURE + DELAI_DIFFUSION <= BH_VIE)
+  ? ok('pire cas : '+((fenetreUtile+DELAI_SIGNATURE+DELAI_DIFFUSION)/1000)+' s <= '+(BH_VIE/1000)+' s, la TX ne peut pas arriver perimee')
+  : ko('PIRE CAS HORS BUDGET');
 
 /* Un blockhash trop vieux pour survivre a la signature doit etre renouvele */
 let demandes=0;
@@ -121,8 +132,16 @@ CHAINE.bhCache='VIEUX'; CHAINE.bhTemps=Date.now()-30000;   /* 30 s d'age */
 const bhCourt = await blockhashFrais(0);
 (bhCourt==='VIEUX') ? ok('sans attente prevue : le cache de 30 s est reutilise') : ko('cache ignore a tort');
 CHAINE.bhCache='VIEUX'; CHAINE.bhTemps=Date.now()-30000;
-const bhLong = await blockhashFrais(DELAI_SIGNATURE);
+const bhLong = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
 (bhLong!=='VIEUX') ? ok('avec 45 s de signature devant : blockhash renouvele au lieu d\'expirer') : ko('BLOCKHASH PERIME SERVI : la TX sera rejetee');
+
+/* Le canal est recalcule a chaque envoi : un timeout sur Seed Vault ne doit
+   pas contaminer le message d'un envoi suivant par extension. */
+const srcCanal=require('fs').readFileSync(require('path').join(__dirname,'../game/index_v37.html'),'utf8');
+const iFn = srcCanal.indexOf('async function signerEtEnvoyer');
+const iRaz = srcCanal.indexOf('CHAINE.canalAuto = false;', iFn);
+const iVrai = srcCanal.indexOf('CHAINE.canalAuto = true;', iFn);
+(iRaz>iFn && iRaz<iVrai) ? ok('canalAuto remis a false en tete de signerEtEnvoyer, avant toute affectation') : ko('canalAuto pas reinitialise : message trompeur possible');
 
 /* ---- 7. Timeout : le message depend de qui diffuse ---- */
 CHAINE.canalAuto=false;

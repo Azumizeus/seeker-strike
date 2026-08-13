@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 4-moteur.js
    Moteur de jeu : boucle, rendu, ennemis, boss
-   Lignes 3439 a 5638 du script (game/index_v37.html)
+   Lignes 3446 a 5645 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -1804,7 +1804,7 @@ async function payerEnSKR(montant, etiquette){
              : new TextEncoder().encode('seeker-strike:'+etiquette)
     }));
 
-    const blockhash = await blockhashFrais(DELAI_SIGNATURE);
+    const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
     const tx = new Transaction({ feePayer:joueur, recentBlockhash:blockhash });
     instrs.forEach(i=>tx.add(i));
     const sig = await signerEtEnvoyer(tx);
@@ -1838,7 +1838,7 @@ async function donnerSOL(montant){
     const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
     const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
     const tx = new Transaction({ feePayer:joueur,
-      recentBlockhash: await blockhashFrais(DELAI_SIGNATURE) });
+      recentBlockhash: await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION) });
     tx.add(SystemProgram.transfer({ fromPubkey:joueur,
       toPubkey:new PublicKey(DONS.adresse), lamports:Math.round(montant*1e9) }));
     tx.add(new TransactionInstruction({

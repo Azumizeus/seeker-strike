@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 3-solana.js
    Integration Solana : wallet, signatures, RPC, paliers
-   Lignes 2109 a 3439 du script (game/index_v37.html)
+   Lignes 2109 a 3446 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -165,13 +165,20 @@ CHAINE.bhCache=null; CHAINE.bhTemps=0;
    le cache reservait la meme valeur morte pendant 40 s et TOUTES les relances
    echouaient d'affilee. */
 function invaliderBlockhash(){ CHAINE.bhCache=null; CHAINE.bhTemps=0; }
-/* Duree de vie prudente d'un blockhash : 150 blocs, soit 60 a 80 s selon la
-   charge. On retient la borne basse.
-   Budget : BH_FENETRE (40 s) couvre les appels sans attente ; des qu'une
-   signature est attendue (45 s), la fenetre reellement utilisable tombe a
-   BH_VIE - DELAI_SIGNATURE = 15 s. C'est voulu et suffisant : le cache existe
-   pour absorber un double appui et les envois rapproches, pas pour durer. */
-const BH_VIE = 60000;
+/* Duree de vie d'un blockhash : 150 blocs, soit 60 a 80 s selon la charge.
+   On retient 55 s, pas 60 : les 150 blocs courent depuis la CREATION du
+   blockhash, pas depuis l'instant ou le RPC nous le rend. Il arrive deja
+   vieux de une a trois secondes. */
+const BH_VIE = 55000;
+/* Ce qui s'ecoule APRES la signature, avant que la transaction n'atteigne le
+   reseau : reprises de diffusion (0,8 + 1,6 + 2,4 s) et allers-retours. Sans
+   cette part, le budget etait juste... sauf quand le RPC sature, c'est-a-dire
+   exactement le cas pour lequel `diffuser()` existe. */
+const DELAI_DIFFUSION = 7000;
+/* Budget quand une signature est attendue : la fenetre de cache reellement
+   utilisable tombe a BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION, soit 3 s.
+   C'est peu, et c'est voulu : le cache n'a plus qu'un role, absorber un
+   double appui. Tout le reste repart d'un blockhash frais. */
 /* `marge` = temps qui va encore s'ecouler avant la diffusion, typiquement
    l'attente de signature. Un blockhash de 39 s garde en cache, suivi de 45 s
    de signature, arrivait perime sur le reseau : on en reprend un frais si le
@@ -472,7 +479,7 @@ async function envoyerTxSeeker(action){
     const joueur = new PublicKey(adresse);
     /* La transaction va attendre la signature du joueur : on demande un
        blockhash qui sera encore valide a ce moment-la. */
-    const blockhash = await blockhashFrais(DELAI_SIGNATURE);
+    const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
     const tx = new Transaction({ feePayer: joueur, recentBlockhash: blockhash });
     if(action==='seeker-task'){
       /* Les 15 memos + le pourboire : une transaction, une signature. */
