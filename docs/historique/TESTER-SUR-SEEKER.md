@@ -36,7 +36,7 @@ Tout est dedans : 135 images, 8 musiques. Aucun serveur, aucun réseau.
 
 Ouvre-le dans Chrome. L'URL sera `file:///...` et le jeu tourne entièrement.
 
-**Ce qui marchera** : tout le jeu. Les 22 secteurs, les 7 boss, la démo, les
+**Ce qui marchera** : tout le jeu. Les 22 secteurs, les 10 boss, la démo, les
 deux campagnes, les réglages, FR/EN, les easter eggs.
 
 **Ce qui ne marchera pas** : la connexion wallet. C'est normal et prévu — le

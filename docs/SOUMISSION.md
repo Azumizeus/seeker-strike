@@ -9,7 +9,7 @@ version française ensuite.*
 
 > **Seeker Strike — Genesis Protocol**
 >
-> A vertical shoot'em up built for the Solana Seeker. 22 sectors, 7 bosses,
+> A vertical shoot'em up built for the Solana Seeker. 22 sectors, 10 bosses,
 > 2 campaigns, 14 ships — playable in portrait, one hand, no wallet required.
 >
 > The Solana layer is a parallel progression, never a paywall: real devnet
@@ -33,7 +33,7 @@ version française ensuite.*
 >
 > ### The game
 >
-> 22 sectors across 2 campaigns (GENESIS and CHAOS PROTOCOL), 7 bosses with
+> 22 sectors across 2 campaigns (GENESIS and CHAOS PROTOCOL), 10 bosses with
 > multi-phase transformations, 14 ships each with its own firing signature,
 > 4 ammo types, 3 combat boosts, an infinite mode and a daily arena.
 >
@@ -98,7 +98,7 @@ version française ensuite.*
 >
 > ### Le jeu
 >
-> 22 secteurs répartis sur 2 campagnes (GENESIS et CHAOS PROTOCOL), 7 boss à
+> 22 secteurs répartis sur 2 campagnes (GENESIS et CHAOS PROTOCOL), 10 boss à
 > transformations multiples, 14 vaisseaux ayant chacun sa signature de tir,
 > 4 types de munitions, 3 boosts de combat, un mode infini et une arène
 > quotidienne.

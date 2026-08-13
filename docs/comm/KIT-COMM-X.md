@@ -40,7 +40,7 @@ Real Solana transactions. Zero pay-to-win.
 ### Tweet 2/5 — le jeu (média : screenshot accueil + screenshot carte)
 
 ```
-22 sectors. 2 campaigns. 7 multi-phase bosses. 14 ships, each with its own firing signature.
+22 sectors. 2 campaigns. 10 multi-phase bosses. 14 ships, each with its own firing signature.
 
 Portrait. One hand. One thumb — drag anywhere on screen to move, firing is automatic. Everything comes down to positioning.
 
@@ -102,7 +102,7 @@ Vraies transactions Solana. Zéro pay-to-win.
 ### Tweet 2/5 — le jeu
 
 ```
-22 secteurs. 2 campagnes. 7 boss à transformations. 14 vaisseaux, chacun sa signature de tir.
+22 secteurs. 2 campagnes. 10 boss à transformations. 14 vaisseaux, chacun sa signature de tir.
 
 Portrait. Une main. Un pouce — tu glisses le doigt où tu veux pour te déplacer, le tir est automatique. Tout se joue au placement.
 

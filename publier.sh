@@ -29,7 +29,12 @@ cp "$SRC" index.html
 echo "index.html mis a jour ($(du -h index.html | cut -f1))"
 
 MSG="${1:-maj du jeu $(date '+%d/%m %Hh%M')}"
-git add -A
+# On ajoute le build et les fichiers deja suivis, rien de plus.
+# Un "git add -A" balayait tout le dossier et embarquait des fichiers
+# de travail par accident. Pour publier un NOUVEAU fichier, fais un
+# "git add <fichier>" avant de lancer ce script.
+git add index.html
+git add -u
 if git diff --cached --quiet; then
   echo "Rien de nouveau a publier."
   exit 0
