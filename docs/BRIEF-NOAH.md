@@ -136,7 +136,7 @@ tranche de 10 secondes. En enchaînant les envois, un joueur recevait
 | Mesure | Effet |
 |---|---|
 | Blockhash mis en cache, fenêtre adaptative (`blockhashFrais(marge)`) | Le cache n'est servi que si le blockhash survivra à l'attente de signature. **Sur le chemin d'envoi la marge est telle que la fenêtre utile tombe à zéro : chaque envoi signé repart d'un blockhash frais.** C'est assumé — voir plus bas. |
-| Reprise avec attente croissante + bascule de RPC | Sur un 429 : attente 0,8 s → 1,6 s → 2,4 s, bascule sur Ankr, 4 tentatives avant abandon |
+| Reprise avec attente croissante + bascule de RPC | Sur un 429 : attente 0,8 s → 1,6 s → 2,4 s, bascule sur l'endpoint suivant du pool, 4 tentatives avant abandon |
 | Délai de 20 s entre deux lots (`DELAI_LOT`) | Le bouton affiche `PATIENTE 14s` en compte à rebours au lieu de partir dans le mur |
 
 `causeLisible()` traduit désormais toute erreur technique en une phrase
@@ -154,6 +154,7 @@ raison :
 | `DELAI_SIGNATURE` | 40 s | **Borné par la physique** : au-delà de `BH_VIE − DELAI_DIFFUSION`, la signature serait rejetée de toute façon. Attendre plus ne rend pas service, ça fait signer pour rien |
 | `DELAI_DIFFUSION` | 7 s | Reprises de `diffuser()` (0,8 + 1,6 + 2,4 s) et allers-retours réseau |
 | `BH_COUSSIN` | 3 s | Réserve. Sans elle le pire cas tombait à l'égalité exacte : une diffusion à 7,5 s au lieu de 7 faisait expirer la transaction |
+| `DELAI_RECONNEXION` | 30 s | **Hors budget** : `amorcerWallet()` retrouve le wallet *avant* de prendre le blockhash. Compté après, ces 30 s portaient le pire cas à 77 s |
 
 Pire cas : 2 + 40 + 7 = 49 s sur 52 disponibles. **3 s de coussin garanties.**
 
@@ -247,12 +248,15 @@ automatisés vérifient la logique, pas le ressenti ni le rendu.
 
 - [ ] Premier lancement : choix de langue, puis tutoriel
 - [ ] Connexion Phantom, envoi des 15 TX, vérification sur Solscan
-- [ ] **Envoi lancé, puis attendre 40 s avant de signer** : la transaction doit
+- [ ] **Envoi lancé, puis attendre 30 s avant de signer** : la transaction doit
       passer, pas expirer. Personne ne teste ça spontanément — on signe toujours
       vite quand on teste soi-même — et c'est le seul moyen de vérifier sur un
       vrai appareil que le budget de temps du blockhash tient.
-- [ ] Envoi lancé, puis fermer le wallet sans signer : au bout de 45 s le jeu
-      doit rendre la main avec un message, pas rester bloqué
+      **30 s, pas 40** : à 40 s la borne `DELAI_SIGNATURE` a déjà rendu la main,
+      le test échouerait par construction et ferait conclure à un faux bug.
+- [ ] Envoi lancé, puis **ne pas signer du tout** : au bout de 40 s le jeu doit
+      rendre la main avec un message lisible, pas rester bloqué sur
+      « SIGNATURE EN COURS »
 - [ ] Deux envois d'affilée : le second attend bien 20 s, compte à rebours visible
 - [ ] Rechargement de page, nouvel envoi sans reconnexion manuelle
 - [ ] Achat d'un vaisseau en SOL

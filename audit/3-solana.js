@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 3-solana.js
    Integration Solana : wallet, signatures, RPC, paliers
-   Lignes 2109 a 3458 du script (game/index_v37.html)
+   Lignes 2109 a 3484 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -110,8 +110,13 @@ function estSature(e){
    Dans tous ces cas la bonne reaction est la meme : changer d'endpoint,
    surtout pas declarer la transaction perdue. */
 function estRpcCasse(e){
-  if(estSature(e)) return true;
   const m=String((e&&(e.message||e))||'').toLowerCase();
+  /* Un `timeout:` vient de NOTRE horloge et vise le wallet, pas l'endpoint.
+     Sans ce filtre, un joueur qui tarde a signer ferait ecarter un RPC sain
+     pour toute la session — RPC_MORTS n'est vide que par reconstruirePool().
+     Aujourd'hui aucun chemin ne l'amene ici ; c'est une garde pour demain. */
+  if(m.indexOf('timeout:')===0) return false;
+  if(estSature(e)) return true;
   return m.indexOf('union of')>=0
       || m.indexOf('expected the value to satisfy')>=0
       || m.indexOf('failed to fetch')>=0
@@ -329,6 +334,25 @@ function avecDelai(promesse, ms, quoi){
     new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error('timeout:'+quoi)), ms); })
   ]);
 }
+/* Prepare le canal de signature SANS rien demander au joueur ni prendre de
+   blockhash. A appeler avant `blockhashFrais` : la branche de repli de
+   `retrouverProvider` fait `await p.connect()`, qui ouvre le wallet et peut
+   attendre jusqu'a 30 s. Prise apres, l'horloge du blockhash courait pendant
+   cette attente : 30 + 40 + 7 = 77 s pour un blockhash qui n'en vaut que 52.
+   Une fois amorce, l'appel interne a signerEtEnvoyer est instantane. */
+async function amorcerWallet(){
+  try{
+    if(S.walletType!=='mwa'){
+      await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
+      if(_providerExt) return true;
+    }
+    /* Seed Vault : on precharge le module, qui vient du reseau. L'autorisation
+       elle-meme reste dans signerEtEnvoyer, c'est elle qui parle au joueur. */
+    if(!navigateurIntegre()) await avecDelai(initMWA(), DELAI_RECONNEXION, 'chargement du wallet');
+  }catch(e){ /* on n'echoue pas ici : signerEtEnvoyer rejouera et tranchera */ }
+  return false;
+}
+
 async function signerEtEnvoyer(tx){
   let sig=null;
   /* Deux familles de canaux, et un delai depasse n'a pas le meme sens :
@@ -489,6 +513,8 @@ async function envoyerTxSeeker(action){
       LOG.log('[SEEKER] adresse convertie en base58');
     }
     const joueur = new PublicKey(adresse);
+    /* Reconnexion d'abord, blockhash ensuite : voir amorcerWallet(). */
+    await amorcerWallet();
     /* La transaction va attendre la signature du joueur : on demande un
        blockhash qui sera encore valide a ce moment-la. */
     const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);

@@ -154,6 +154,33 @@ const iRaz = srcCanal.indexOf('CHAINE.canalAuto = false;', iFn);
 const iVrai = srcCanal.indexOf('CHAINE.canalAuto = true;', iFn);
 (iRaz>iFn && iRaz<iVrai) ? ok('canalAuto remis a false en tete de signerEtEnvoyer, avant toute affectation') : ko('canalAuto pas reinitialise : message trompeur possible');
 
+/* ---- 6bis. La reconnexion est HORS du budget du blockhash ---- */
+const srcB=require('fs').readFileSync(require('path').join(__dirname,'../game/index_v37.html'),'utf8');
+(typeof amorcerWallet==='function') ? ok('amorcerWallet() present') : ko('amorcerWallet absent');
+/* Dans chaque fonction d'envoi, l'amorcage doit preceder la prise du blockhash */
+['async function envoyerTxSeeker','async function payerEnSKR','async function donnerSOL'].forEach(fn=>{
+  const i=srcB.indexOf(fn);
+  const fin=srcB.indexOf('\n}', srcB.indexOf('finally{ CHAINE.enCours=false; }', i));
+  const bloc=srcB.slice(i, fin>i?fin:i+9000);
+  const a=bloc.indexOf('amorcerWallet()');
+  const b=bloc.indexOf('blockhashFrais(');
+  (a>=0 && b>=0 && a<b)
+    ? ok(fn.replace('async function','').trim()+' : wallet amorce AVANT la prise du blockhash')
+    : ko(fn+' : amorcage '+a+' / blockhash '+b+' — les 30 s de reconnexion rentrent dans le budget');
+});
+(DELAI_RECONNEXION + DELAI_SIGNATURE + DELAI_DIFFUSION > BH_VIE)
+  ? ok('sans amorcage le budget explosait ('+((DELAI_RECONNEXION+DELAI_SIGNATURE+DELAI_DIFFUSION)/1000)+' s > '+(BH_VIE/1000)+' s) — d\'ou amorcerWallet()')
+  : ok('reconnexion assez courte pour tenir dans le budget de toute facon');
+(DELAI_SIGNATURE + DELAI_DIFFUSION + BH_COUSSIN <= BH_VIE)
+  ? ok('budget complet hors reconnexion : '+((DELAI_SIGNATURE+DELAI_DIFFUSION+BH_COUSSIN)/1000)+' s <= '+(BH_VIE/1000)+' s')
+  : ko('BUDGET DEPASSE');
+
+/* Un timeout de notre horloge ne doit pas condamner un RPC sain */
+(estRpcCasse(new Error('timeout:signature'))===false)
+  ? ok('timeout du wallet : le RPC n\'est pas ecarte a tort') : ko('un joueur lent ferait ecarter Helius pour la session');
+(estRpcCasse(new Error('gateway timeout'))===true)
+  ? ok('vrai timeout reseau : toujours reconnu comme panne RPC') : ko('timeout reseau ignore');
+
 /* ---- 7. Timeout : le message depend de qui diffuse ---- */
 CHAINE.canalAuto=false;
 (/réessaie/.test(causeLisible(new Error('timeout:signature')))) ? ok('diffusion locale : "'+causeLisible(new Error('timeout:signature'))+'"') : ko('message : '+causeLisible(new Error('timeout:signature')));
