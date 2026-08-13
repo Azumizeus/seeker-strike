@@ -73,6 +73,28 @@ sont restés cassés sans qu'aucun test ne le voie. Vérifiez le compteur.
 
 ---
 
+## Hébergement statique : deux pièges
+
+**`.nojekyll`** — GitHub Pages passe les fichiers par Jekyll, qui **ignore
+purement et simplement** tout fichier ou dossier dont le nom commence par `_`.
+Un asset ainsi nommé renverrait 404 en production alors qu'il fonctionne en
+local, sans qu'aucun test ne le voie. Un fichier vide `.nojekyll` à la racine
+du dossier servi supprime le risque. Il est déjà en place à la racine du dépôt
+et dans `noah-build/`.
+
+Vérification, à relancer si des assets sont ajoutés :
+
+```bash
+find noah-build/public -type f | grep -E '/_|[ éèàêç]'
+```
+
+Sortie vide attendue. Jekyll casse aussi sur les espaces et les accents.
+
+**Sous-répertoire** — tous les chemins d'assets sont relatifs, sans `/`
+initial. Le jeu fonctionne donc aussi bien à la racine d'un domaine que dans un
+sous-répertoire (`https://exemple.github.io/seeker-strike/`). Ne les rendez pas
+absolus.
+
 ## Vérifier que rien n'est cassé
 
 ```bash
@@ -90,6 +112,18 @@ une faille d'injection HTML.
 ---
 
 ## Politique de sécurité de contenu
+
+**Sur GitHub Pages : rien à faire.** Pages n'émet aucun en-tête
+`Content-Security-Policy` et n'en accepte aucun. Cette section ne vaut que
+pour Netlify, Vercel, ou tout hébergeur qui en impose une — ne cherchez pas où
+la placer sur Pages, ce n'est pas possible.
+
+Sur **Netlify**, c'est un fichier `_headers` à la racine du dossier servi :
+
+```
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://esm.sh; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; media-src 'self' data:; connect-src https://devnet.helius-rpc.com https://api.devnet.solana.com https://solana-devnet.g.alchemy.com https://solana-devnet.api.onfinality.io https://esm.sh; frame-src 'none'
+```
 
 La page ne déclare aucune CSP. Si l'hébergeur en impose une :
 
