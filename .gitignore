@@ -27,3 +27,4 @@ game/assets_opt/
 docs/_test.*
 *.avant-*
 .DS_Store
+revue-assets test.csv
