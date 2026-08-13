@@ -1,0 +1,17 @@
+Décors de combat, un par nœud de la carte. Format .jpg, ces noms exacts :
+
+  niveau_qg.jqg            → nœud 0 — QG, Terre vue de l'espace
+  niveau_entrainement.jpg  → nœud 1 — nébuleuse bleue calme
+  niveau_asteroides.jpg    → nœud 2 — champ d'astéroïdes dérivant
+  niveau_station.jpg       → nœud 3 — intérieur de station, lumières
+  niveau_vortex.jpg        → nœud 4 — spirale galactique (boss Vortex)
+  niveau_nebuleuse.jpg     → nœud 5 — nébuleuse rouge/violette dense
+  niveau_etoile.jpg        → nœud 6 — étoile mourante, rouge intense (boss Sentinelle)
+  niveau_trounoir.jpg      → nœud 7 — vide spatial + trou noir (boss Dragon)
+
+Format conseillé : 768×768, JPEG qualité ~72, centre sombre pour garder
+les projectiles lisibles.
+
+Ce qui manque retombe automatiquement sur bg_gameplay. Aucun écran noir possible.
+Le décor est préchargé pendant l'écran de préparation, puis appliqué avec un
+fondu de 0,55 s au lancement de la mission.
