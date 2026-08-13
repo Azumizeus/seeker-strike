@@ -1,0 +1,2388 @@
+e'); }
+  else { Audio2.jouerSfx('defeat'); haptique('defaite'); }
+  Audio2.jouerMusique('menu');
+  /* Le score entre au classement local */
+  if(g.coop && g.wing){
+    const moi=g.killsJoueur||0, lui=g.wing.kills||0;
+    const verdict = moi>lui?'VICTOIRE':moi<lui?'D\u00c9FAITE':'\u00c9GALIT\u00c9';
+    const sub=document.getElementById('res-sub');
+    if(sub) sub.textContent='VOUS '+moi+' \u2014 WINGMAN '+lui+'  \u2022  '+verdict;
+    if(moi>lui){ S.skr+=180; Audio2.jouerSfx('victory'); toast('\ud83c\udfc6 '+verdict+' \u2022 +120 GC',3200); }
+    else { Audio2.jouerSfx('defeat'); toast(verdict,2400); }
+    enregistrerRecord('Arena Coop', g.score, moi+' vs '+lui);
+  }
+  if(g.arena){
+    const bonus=g.arenaReussi?1.5:1;
+    const sc=Math.round(g.score*bonus);
+    if(!S.arenaRecords) S.arenaRecords={};
+    if(sc>(S.arenaRecords[g.arena.id]||0)){
+      S.arenaRecords[g.arena.id]=sc;
+      toast('\ud83c\udfc5 Record Arena \u2022 '+sc.toLocaleString(),3200);
+    }
+    enregistrerRecord('Arena \u2022 '+g.arena.nom, sc, g.arenaReussi?'termin\u00e9':'\u00e9limin\u00e9');
+    g.score=sc;
+  }
+  else if(g.infini) enregistrerRecord('Mode Infini', g.score, 'vague '+g.wave);
+  else if(S.currentNode>=0){
+    const nd=NODES.find(x=>x.id===S.currentNode);
+    const d=DIFFICULTES[loadout.difficulte]||DIFFICULTES.normal;
+    enregistrerRecord(nd?nd.title:'Mission', g.score, d.nom+(g.lives>0?'':' \u2022 \u00e9chec'));
+  }
+  document.getElementById('modal-result').classList.add('show');
+  save();
+
+  _finirDemo();   /* la demo ne laisse aucune trace dans la progression */
+}
+function closeResult(){ document.getElementById('modal-result').classList.remove('show'); show('map'); ui(); }
+
+/* ============================================================
+   ARMURERIE — 18 articles en 4 rayons
+   ============================================================ */
+function articlesShop(){
+  return [
+   {cat:'\u2699\ufe0f AM\u00c9LIORATIONS PERMANENTES', items:[
+    {id:'wpn',   ico:'icoArme',   name:'Weapon Core',     desc:T('+1 niveau d\u2019arme')+' ('+T('actuel')+' : '+S.weapon+')', sol:0, skr:450},
+    {id:'rate',  ico:'icoCadence',name:'Hyper Cycle',     desc:'Cadence +20% d\u00e9finitive',            sol:0, skr:600},
+    {id:'vie',   ico:'icoCoque',   name:'Coque renforc\u00e9e', desc:'+1 vie de d\u00e9part (max 3)',       sol:0, skr:800},
+    {id:'aimant',ico:'icoShield',  name:'Aimant \u00e0 butin',  desc:'Rayon de ramassage +60%',           sol:0, skr:550}
+   ]},
+   {cat:'\ud83d\udca5 CHARGES DE BONUS', items:[
+    {id:'mitra', ico:'pwMinigun', name:'+2 Mitrailleuse',  desc:T('En stock')+' : '+(S.charges.mitra||0), sol:0, skr:120},
+    {id:'nuke',  ico:'pwNuke',    name:'+1 Bombe',         desc:T('En stock')+' : '+(S.charges.nuke||0),  sol:0, skr:200},
+    {id:'ghost', ico:'pwGhost',   name:'+1 Fant\u00f4me',      desc:T('En stock')+' : '+(S.charges.ghost||0), sol:0, skr:180},
+    {id:'lot3',  ico:'icoLot',   name:'Lot complet',      desc:'2 mitrailleuses + 1 bombe + 1 fant\u00f4me', sol:0, skr:420}
+   ]},
+   {cat:'\ud83c\udfaf MUNITIONS', items:[
+    {id:'spread',ico:'icoSpread',name:'Spread',      desc:S.unlockedMun.includes('spread')?T('Débloquée'):T('Tir large, 5 projectiles'), sol:0, skr:260, unique:'spread'},
+    {id:'perf',  ico:'ammoPerf',   name:'Perforantes', desc:S.unlockedMun.includes('perf')?T('Débloquée'):T('Dégâts')+' \u00d71.55', sol:0, skr:340, unique:'perf'},
+    {id:'hyper', ico:'ammoHoming', name:'Hyper Rapid', desc:S.unlockedMun.includes('hyper')?T('Débloquée'):T('Cadence')+' \u00d71.7', sol:0, skr:400, unique:'hyper'}
+   ]},
+   {cat:'\ud83d\udee0\ufe0f CONSOMMABLES \u2014 une mission', items:[
+    {id:'repair', ico:'icoRepair',  name:'Kit de r\u00e9paration', desc:'+2 vies',        sol:0, skr:90},
+    {id:'scan',   ico:'icoScan',   name:'Scan tactique',       desc:'Drops \u00d71.5',   sol:0, skr:130},
+    {id:'boost',  ico:'icoBoost',name:'Surcharge',           desc:'D\u00e9g\u00e2ts \u00d71.3', sol:0, skr:160}
+   ]}
+  ];
+}
+function renderShop(){
+  const box=document.getElementById('shop-list'); if(!box) return;
+  box.innerHTML=articlesShop().map(rayon=>
+    '<div class="text-[10px] text-gray-500 font-semibold tracking-wider mt-3 mb-1.5">'+rayon.cat+'</div>'+
+    rayon.items.map(i=>{
+      const img=ASSETS[i.ico];
+      const possede = i.unique && S.unlockedMun.includes(i.unique);
+      const prixOk = i.sol ? S.sol>=i.sol : S.skr>=i.skr;
+      return '<div class="glass rounded-2xl flex justify-between items-center gap-3" style="padding:14px 15px;margin-bottom:10px"'+
+        (possede?' data-off':'')+'>'+
+        '<div class="flex items-center gap-2.5" style="min-width:0">'+
+          (img?'<img src="'+img.src+'" style="width:30px;height:30px;object-fit:contain;flex:none"/>':'')+
+          '<div style="min-width:0"><div class="font-semibold text-[13px]">'+T(i.name)+'</div>'+
+          '<div class="text-[10px] text-gray-500">'+T(i.desc)+'</div></div>'+
+        '</div>'+
+        (possede
+          ? '<span class="text-[10px] text-green-400 flex-none">\u2713</span>'
+          : '<button onclick="buy(\''+i.id+'\')" class="'+(prixOk?'btn':'glass')+' px-3 py-2 rounded-xl text-[11px] font-bold flex-none"'+
+            (prixOk?'':' style="opacity:.5"')+'>'+
+            (i.sol?i.sol+' SOL':i.skr+' GC')+'</button>')+
+      '</div>';
+    }).join('')
+  ).join('');
+}
+function buy(id){
+  const tous=articlesShop().reduce((t,r)=>t.concat(r.items),[]);
+  const it=tous.find(x=>x.id===id); if(!it) return;
+  if(it.unique && S.unlockedMun.includes(it.unique)) return toast('D\u00e9j\u00e0 d\u00e9bloqu\u00e9');
+  if(it.sol && S.sol<it.sol) return toast('SOL insuffisant');
+  if(it.skr && S.skr<it.skr) return toast('Cr\u00e9dits insuffisants');
+  if(id==='vie' && (S.bonusVies||0)>=3) return toast('Maximum atteint');
+  S.sol-=it.sol||0; S.skr-=it.skr||0;
+
+  if(id==='wpn')    S.weapon++;
+  if(id==='rate')   S.fireRate=+(S.fireRate*1.2).toFixed(2);
+  if(id==='vie'){   S.bonusVies=(S.bonusVies||0)+1; S.maxLives++; }
+  if(id==='aimant') S.aimant=true;
+  if(id==='mitra')  S.charges.mitra=(S.charges.mitra||0)+2;
+  if(id==='nuke')   S.charges.nuke=(S.charges.nuke||0)+1;
+  if(id==='ghost')  S.charges.ghost=(S.charges.ghost||0)+1;
+  if(id==='lot3'){  S.charges.mitra=(S.charges.mitra||0)+2; S.charges.nuke=(S.charges.nuke||0)+1; S.charges.ghost=(S.charges.ghost||0)+1; }
+  if(it.unique)     S.unlockedMun.push(it.unique);
+  if(id==='repair') S.consommables={...(S.consommables||{}), vies:2};
+  if(id==='scan')   S.consommables={...(S.consommables||{}), drops:1.5};
+  if(id==='boost')  S.consommables={...(S.consommables||{}), degats:1.3};
+
+  addTx('shop:'+id); Audio2.jouerSfx('levelup'); haptique('victoire');
+  toast('\u2705 '+it.name);
+  save(); renderShop(); ui();
+}
+
+function renderShips(){
+  const g=document.getElementById('ship-grid'); if(!g) return;
+  g.innerHTML='';
+  SHIPS.forEach(sh=>{
+    if(sh.id===5 && !S.ghostUnlocked) return;
+    const un=S.unlocked.includes(sh.id), sel=S.ship===sh.id;
+    const verrou=!un && !!sh.cond;      /* se merite, ne s'achete pas */
+    const d=document.createElement('div');
+    d.className='glass rounded-2xl text-center '+(sel?'ring-2 ring-green-400':'')+(un?'':' opacity-50');
+    d.style.padding='14px 12px';
+    const action = verrou
+      ? '<div class="mt-2 py-1.5 text-[9.5px]" style="color:#8b8b9e;line-height:1.4">🔒 '+sh.condTxt+'</div>'
+      : !un
+      ? /* Deux moyens de paiement : SOL, ou le token SKR de Solana Mobile. */
+        '<div class="mt-2 flex gap-1.5">'+
+          '<button onclick="unlockShip('+sh.id+',\'sol\')" class="btn flex-1 py-2 rounded-xl text-[10.5px] font-bold"'+
+            (S.sol<(sh.sol||0)?' style="opacity:.5"':'')+'>'+(sh.sol||0)+' SOL</button>'+
+          '<button onclick="unlockShip('+sh.id+',\'skr\')" class="glass flex-1 py-2 rounded-xl text-[10.5px] font-bold" '+
+            'title="'+(skrIndisponible()?T('Disponible au lancement mainnet'):'')+'" '+
+            'style="border-color:rgba(20,241,149,.5);color:#14F195'+
+            ((skrIndisponible() || (S.soldeSkr||0)<(sh.skr||0))?';opacity:.45':'')+'">'+
+            (sh.skr||0).toLocaleString()+' SKR'+(skrIndisponible()?'<br><span style="font-size:8px;color:#7c7a8c;font-weight:500">'+T('mainnet')+'</span>':'')+'</button>'+
+        '</div>'
+      : sel
+        ? '<div class="mt-2 py-2 text-[11px] font-bold text-green-400">\u2713 \u00c9QUIP\u00c9</div>'
+        : '<button onclick="equiperVaisseau('+sh.id+')" class="glass w-full mt-2 py-2 rounded-xl text-[11px] font-bold" style="border-color:rgba(20,241,149,.5);color:#14F195">\u00c9QUIPER</button>';
+    d.innerHTML='<div style="height:58px;display:flex;align-items:center;justify-content:center">'+
+        ico('ship'+sh.id, sh.emoji, 50)+'</div>'+
+      '<div class="font-semibold text-[12.5px] mt-1">'+sh.name+'</div>'+
+      '<div class="text-[10px] text-gray-500">d\u00e9g\u00e2ts \u00d7'+sh.bonus.toFixed(2)+'</div>'+
+      action;
+    g.appendChild(d);
+  });
+}
+function equiperVaisseau(id){
+  if(!S.unlocked.includes(id)) return toast('Vaisseau non d\u00e9bloqu\u00e9');
+  S.ship=id; loadout.ship=id;
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+  toast(SHIPS[id].name+' \u00e9quip\u00e9',1600);
+  save(); renderShips(); ui();
+}
+/* Paiement d'un vaisseau en SKR : un transfert SPL vers la tresorerie,
+   signe par le joueur. Retourne la signature, ou null si rien n'est parti. */
+async function payerEnSKR(montant, etiquette){
+  if(!S.walletReel || !S.addressComplete){ CHAINE.derniereErreur='wallet non connecte'; return null; }
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
+  if(CHAINE.enCours){ CHAINE.derniereErreur='transaction deja en cours'; return null; }
+  CHAINE.enCours=true;
+  const w3=await chargerWeb3();
+  if(!w3){ CHAINE.enCours=false; CHAINE.derniereErreur='web3.js indisponible'; return null; }
+  const spl=await chargerSPL();
+  if(!spl){ CHAINE.enCours=false; CHAINE.derniereErreur='module SPL indisponible'; return null; }
+  try{
+    const { PublicKey, Transaction, TransactionInstruction } = w3;
+    const joueur  = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
+    const tresor  = new PublicKey(TRESORERIE.adresse);
+    const mint    = new PublicKey(mintSKR());
+    const source  = spl.getAssociatedTokenAddressSync(mint, joueur, true);
+    const dest    = spl.getAssociatedTokenAddressSync(mint, tresor, true);
+    const brut    = BigInt(Math.round(montant * Math.pow(10, SKR.decimales)));
+
+    const instrs=[];
+    /* Si la tresorerie n'a pas encore de compte pour ce token, on le cree :
+       sans ca le transfert echoue avec un message incomprehensible. */
+    let existe=null;
+    try{ existe = await CHAINE.connexion.getAccountInfo(dest); }catch(e){}
+    if(!existe) instrs.push(spl.createAssociatedTokenAccountInstruction(joueur, dest, tresor, mint));
+    instrs.push(spl.createTransferCheckedInstruction(source, mint, dest, joueur, brut, SKR.decimales));
+    /* Trace lisible de l'achat, comme pour la Seeker Task */
+    instrs.push(new TransactionInstruction({
+      keys:[{ pubkey:joueur, isSigner:true, isWritable:false }],
+      programId:new PublicKey(CHAINE.memoProgram),
+      data:(typeof Buffer!=='undefined'&&Buffer.from)
+             ? Buffer.from('seeker-strike:'+etiquette,'utf8')
+             : new TextEncoder().encode('seeker-strike:'+etiquette)
+    }));
+
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
+      CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
+      return null;
+    }
+    const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
+    const tx = new Transaction({ feePayer:joueur, recentBlockhash:blockhash });
+    instrs.forEach(i=>tx.add(i));
+    const sig = await signerEtEnvoyer(tx);
+    if(sig){
+      LOG.log('[SEEKER] paiement SKR : '+sig);
+      if(!S.signatures) S.signatures=[];
+      S.signatures.unshift({ action:etiquette, sig, t:Date.now() });
+      S.signatures=S.signatures.slice(0,20);
+    }
+    return sig||null;
+  }catch(e){
+    CHAINE.derniereErreur=causeLisible(e)||'erreur inconnue';
+    if(/blockhash not found|block height exceeded/i.test(String((e&&(e.message||e))||''))) invaliderBlockhash();
+    LOG.warn('[SEEKER] paiement SKR refuse : '+CHAINE.derniereErreur);
+    return null;
+  }finally{ CHAINE.enCours=false; }
+}
+
+/* Don en SOL : un simple transfert natif, signe par le joueur. */
+async function donnerSOL(montant){
+  if(!S.connected) return toast('Connecte ton wallet d\'abord', 2400);
+  if(!S.walletReel) return toast('Le don demande un vrai wallet', 2600);
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
+  if(CHAINE.enCours) return toast('Transaction en cours…');
+  CHAINE.enCours=true;
+  try{
+    const w3=await chargerWeb3();
+    if(!w3) return toast('❌ web3.js indisponible', 3000);
+    const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
+    const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
+      return toast('\u274c '+T('session wallet perdue, reconnecte-toi'), 3600);
+    }
+    const tx = new Transaction({ feePayer:joueur,
+      recentBlockhash: await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION) });
+    tx.add(SystemProgram.transfer({ fromPubkey:joueur,
+      toPubkey:new PublicKey(DONS.adresse), lamports:Math.round(montant*1e9) }));
+    tx.add(new TransactionInstruction({
+      keys:[{ pubkey:joueur, isSigner:true, isWritable:false }],
+      programId:new PublicKey(CHAINE.memoProgram),
+      data:(typeof Buffer!=='undefined'&&Buffer.from)
+             ? Buffer.from('seeker-strike:don:sol','utf8')
+             : new TextEncoder().encode('seeker-strike:don:sol')
+    }));
+    toast('✍️ Signe le don de '+montant+' SOL…', 3000);
+    const sig=await signerEtEnvoyer(tx);
+    if(!sig){
+      const c=CHAINE.derniereErreur?' • '+String(CHAINE.derniereErreur).slice(0,60):'';
+      CHAINE.derniereErreur=null;
+      return toast('❌ Don annulé'+c, 4000);
+    }
+    if(!S.signatures) S.signatures=[];
+    S.signatures.unshift({ action:'don:sol', sig, t:Date.now() });
+    S.signatures=S.signatures.slice(0,20);
+    S.donsSol=+((S.donsSol||0)+montant).toFixed(4);
+    S.sol=Math.max(0, +(S.sol-montant).toFixed(4));
+    creditTX(1);
+    Audio2.jouerSfx('levelup'); haptique('victoire');
+    toast('💜 Merci • '+montant+' SOL reçus', 3400);
+    save(); ui(); renderSettings();
+  }catch(e){
+    LOG.warn('[SEEKER] don SOL refuse : '+(e&&e.message));
+    toast('❌ Don annulé • '+String(e&&e.message).slice(0,50), 4000);
+  }finally{ CHAINE.enCours=false; }
+}
+
+/* Don en SKR : un transfert SPL, meme mecanique que l'achat d'un vaisseau. */
+async function donnerSKR(montant){
+  if(!S.connected) return toast('Connecte ton wallet d\'abord', 2400);
+  if(!S.walletReel) return toast('Le don demande un vrai wallet', 2600);
+  if(skrIndisponible()) return toast(T('Paiement SKR disponible au lancement mainnet · utilise le SOL sur devnet'), 4200);
+  const solde=await lireSoldeSKR();
+  if(solde<montant) return toast('Il te manque '+(montant-solde).toLocaleString()+' SKR', 3000);
+  toast('✍️ Signe le don de '+montant.toLocaleString()+' SKR…', 3000);
+  const sig=await payerEnSKR(montant, 'don:skr');
+  if(!sig){
+    const c=CHAINE.derniereErreur?' • '+String(CHAINE.derniereErreur).slice(0,60):'';
+    CHAINE.derniereErreur=null;
+    return toast('❌ Don annulé'+c, 4000);
+  }
+  S.donsSkr=(S.donsSkr||0)+montant;
+  S.soldeSkr=Math.max(0,(S.soldeSkr||0)-montant);
+  creditTX(1);
+  Audio2.jouerSfx('levelup'); haptique('victoire');
+  toast('💜 Merci • '+montant.toLocaleString()+' SKR reçus', 3400);
+  save(); ui(); renderSettings();
+}
+
+/* Copie l'adresse de dons : on peut aussi donner sans passer par le jeu. */
+function copierAdresseDon(){
+  const t=DONS.adresse;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(()=>toast('Adresse copiée', 2000))
+                                      .catch(()=>toast(t, 6000));
+      return;
+    }
+  }catch(e){}
+  toast(t, 6000);   /* repli : on affiche l'adresse assez longtemps pour la noter */
+}
+
+function renderPanneauDons(){
+  const box=document.getElementById('panneau-dons'); if(!box) return;
+  if(!DONS.actif){ box.innerHTML=''; return; }
+  const a=DONS.adresse;
+  const court=a.slice(0,6)+'…'+a.slice(-6);
+  box.innerHTML='<div class="sect"><span>💜 '+T('SOUTENIR LE JEU')+'</span><i class="lig"></i></div>'+
+    '<div style="border-radius:16px;border:1px solid rgba(153,69,255,.32);padding:14px;'+
+      'background:linear-gradient(180deg,rgba(30,16,56,.45),rgba(12,9,24,.3))">'+
+    '<div class="text-[10.5px] mb-3" style="color:#a9a3bd;line-height:1.6">'+
+      T('Entièrement facultatif. Aucun don ne débloque quoi que ce soit en jeu — ni vaisseau, ni bonus, ni avantage. Le jeu reste identique si tu ne donnes jamais.')+'</div>'+
+    '<div class="glass" style="border-radius:12px;padding:9px 11px;margin-bottom:11px;'+
+      'display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+      '<span style="font-family:monospace;font-size:10px;color:#9ca3af">'+court+'</span>'+
+      '<button onclick="copierAdresseDon()" style="flex:none;padding:5px 10px;border-radius:8px;'+
+        'font-size:9.5px;font-weight:700;color:#14F195;background:rgba(20,241,149,.12);'+
+        'border:1px solid rgba(20,241,149,.35)">'+T('COPIER')+'</button>'+
+    '</div>'+
+    '<div class="text-[9.5px] mb-1.5" style="color:#7c7a8c">'+T('Don en SOL')+'</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px">'+
+      DONS.sol.map(v=>'<button onclick="donnerSOL('+v+')" class="btn flex-1 py-2 rounded-xl '+
+        'text-[10.5px] font-bold">'+v+' SOL</button>').join('')+
+    '</div>'+
+    '<div class="text-[9.5px] mb-1.5" style="color:#7c7a8c">'+T('Don en SKR')+'</div>'+
+    '<div style="display:flex;gap:6px">'+
+      DONS.skr.map(v=>'<button onclick="donnerSKR('+v+')" class="glass flex-1 py-2 rounded-xl '+
+        'text-[10.5px] font-bold" style="border-color:rgba(20,241,149,.45);color:#14F195'+
+        (skrIndisponible()?';opacity:.45':'')+'">'+v.toLocaleString()+'</button>').join('')+
+      (skrIndisponible()?'<div class="text-[9px] mt-1.5" style="color:#7c7a8c">'+
+        T('SKR disponible au lancement mainnet')+'</div>':'')+
+    '</div>'+
+    (((S.donsSol||0)>0 || (S.donsSkr||0)>0)
+      ? '<div class="text-[10px] mt-3" style="color:#14F195">'+
+        T('Merci • tu as donné {0}',
+          ((S.donsSol||0)>0?(S.donsSol+' SOL'):'')+
+          (((S.donsSol||0)>0&&(S.donsSkr||0)>0)?T(' et '):'')+
+          ((S.donsSkr||0)>0?((S.donsSkr).toLocaleString()+' SKR'):''))+'</div>'
+      : '')+
+    '</div>';
+}
+
+/* Achat d'un vaisseau. Deux monnaies, un seul resultat :
+   - SOL : preleve sur le wallet du joueur, c'est le raccourci payant ;
+   - GC  : gagne en jouant, c'est la voie longue. 1 SOL vaut 30 000 GC.
+   Les vaisseaux a condition ne s'achetent ni en SOL ni en GC : ils se meritent. */
+async function unlockShip(id, monnaie){
+  const sh=SHIPS[id]; if(!sh) return;
+  if(S.unlocked.includes(id)) return toast('Vaisseau d\u00e9j\u00e0 d\u00e9bloqu\u00e9', 1800);
+  if(sh.cond) return toast('Ce vaisseau se m\u00e9rite : '+sh.condTxt, 2800);
+  monnaie = (monnaie==='skr') ? 'skr' : 'sol';
+
+  if(monnaie==='skr'){
+    /* Paiement en token SKR : un vrai transfert SPL vers la tresorerie. */
+    const prix=sh.skr||0;
+    if(!prix) return toast('Ce vaisseau ne s\u2019ach\u00e8te pas en SKR', 2400);
+    if(!S.connected) return toast('Connecte ton wallet pour payer en SKR', 2600);
+    if(!S.walletReel) return toast('Le paiement SKR demande un vrai wallet', 2800);
+    if(skrIndisponible()) return toast(T('Paiement SKR disponible au lancement mainnet · utilise le SOL sur devnet'), 4200);
+    const solde = await lireSoldeSKR();
+    if(solde < prix) return toast('Il te manque '+(prix-solde).toLocaleString()+' SKR', 3000);
+    toast('\u270d\ufe0f Signe le transfert de '+prix.toLocaleString()+' SKR\u2026', 3000);
+    const sig = await payerEnSKR(prix, 'ship:'+id);
+    if(!sig){
+      const cause = CHAINE.derniereErreur ? ' \u2022 '+String(CHAINE.derniereErreur).slice(0,70) : '';
+      CHAINE.derniereErreur=null;
+      return toast('\u274c Paiement echoue'+cause, 5000);
+    }
+    S.unlocked.push(id);
+    S.soldeSkr=Math.max(0,(S.soldeSkr||0)-prix);
+    creditTX(1);
+    Audio2.jouerSfx('levelup'); haptique('victoire');
+    toast('\ud83d\udee0\ufe0f '+sh.name+' d\u00e9bloqu\u00e9 \u2022 -'+prix.toLocaleString()+' SKR', 2800);
+  } else {
+    const prix=sh.sol||0;
+    if(!S.connected) return toast('Connecte ton wallet pour payer en SOL', 2600);
+    if(S.sol<prix) return toast('Solde insuffisant : il te faut '+prix+' SOL', 2800);
+    S.sol=+(S.sol-prix).toFixed(4);
+    S.unlocked.push(id); addTx('ship:'+id); creditTX(1);
+    Audio2.jouerSfx('levelup'); haptique('victoire');
+    toast('\ud83d\udee0\ufe0f '+sh.name+' d\u00e9bloqu\u00e9 \u2022 -'+prix+' SOL', 2800);
+  }
+  save(); renderShips(); ui();
+}
+
+/* ============================================================
+   ORIENTATION ET REDIMENSIONNEMENT
+   Deux problemes distincts :
+   1. le canvas figeait ses dimensions au lancement de la partie et
+      ne les recalculait jamais -> apres une rotation, ou quand la barre
+      d'URL apparait, la zone de jeu ne correspondait plus a l'ecran ;
+   2. un shoot'em up vertical n'a pas de sens en paysage : le terrain
+      devient trop court. Les menus, eux, restent utilisables.
+   ============================================================ */
+/* Hauteur au-dela de laquelle il reste assez de terrain vertical pour jouer,
+   meme en paysage. Un telephone couche tombe vers 390-430 px ; une tablette
+   ou un portable restent au-dessus de 600. */
+const HAUTEUR_JOUABLE = 560;
+function estPaysage(){
+  const l=window.innerWidth||0, h=window.innerHeight||0;
+  /* Le vrai critere n'est pas « large », c'est « pas assez haut pour un
+     shoot'em up vertical ». Se fier au seul rapport largeur/hauteur bloquait
+     les portables a ecran tactile, et l'emulateur des outils de developpement
+     des qu'on refermait la console. */
+  return l > h * 1.15 && h <= HAUTEUR_JOUABLE;
+}
+
+/* Reajuste la surface de jeu sans perdre la partie en cours */
+function redimensionnerCanvas(){
+  if(!G) return;
+  const canvas=document.getElementById('gc'); if(!canvas) return;
+  const dpr=Math.min(devicePixelRatio||1,3);
+  const w=window.innerWidth, h=window.innerHeight;
+  if(!w||!h||(w===G.w && h===G.h)) return;
+  const ratioX=w/G.w, ratioY=h/G.h;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  G.ctx.setTransform(dpr,0,0,dpr,0,0);
+  /* On transpose ce qui vit a l'ecran pour ne rien perdre de vue */
+  const bouge=(o)=>{ if(o){ o.x*=ratioX; o.y*=ratioY; } };
+  bouge(G.player);
+  [G.enemies,G.eBullets,G.bullets,G.orbs,G.particles,G.explosions].forEach(l=>(l||[]).forEach(bouge));
+  bouge(G.boss); bouge(G.wing);
+  G.w=w; G.h=h;
+  G.player.x=Math.max(24,Math.min(w-24,G.player.x));
+  G.player.y=Math.max(60,Math.min(h-PLANCHER_VOL,G.player.y));   /* meme plancher apres rotation */
+}
+
+let _pausePaysage=false;
+/* Verrouillage logiciel : on demande au systeme de rester en portrait.
+   Tous les appareils ne l'acceptent pas, le voile reste donc le filet. */
+let _portraitVerrouille=false;
+function verrouillerPortrait(){
+  try{
+    const o = (typeof screen!=='undefined') && (screen.orientation || screen.msOrientation);
+    if(!o || !o.lock) return;
+    o.lock('portrait-primary')
+      .then(()=>{ _portraitVerrouille=true; })
+      .catch(()=>{ o.lock('portrait').then(()=>{ _portraitVerrouille=true; }).catch(()=>{}); });
+  }catch(e){}
+}
+/* Android n'accorde le verrouillage d'orientation qu'en plein ecran, et
+   seulement a la suite d'un geste de l'utilisateur. On tente donc a chaque
+   premier appui tant que le verrou n'est pas obtenu. */
+let _essaisPleinEcran=0;
+function tenterVerrouillageComplet(){
+  if(_portraitVerrouille) return;
+  /* Tous les navigateurs ne savent pas verrouiller l'orientation. Sans
+     plafond, on redemandait le plein ecran a chaque appui et la console se
+     remplissait de refus. Trois tentatives suffisent : si ca n'a pas pris,
+     ca ne prendra pas, et le voile de rotation fait deja le travail. */
+  if(_essaisPleinEcran>=3) return;
+  const o = (typeof screen!=='undefined') && (screen.orientation || screen.msOrientation);
+  if(!o || !o.lock){ _essaisPleinEcran=3; return; }   /* inutile d'insister */
+  _essaisPleinEcran++;
+  verrouillerPortrait();
+  try{
+    const d=document.documentElement;
+    if(!document.fullscreenElement && d.requestFullscreen){
+      d.requestFullscreen({navigationUI:'hide'}).then(verrouillerPortrait).catch(()=>{});
+    }
+  }catch(e){}
+}
+/* Le voile ne doit pas se declencher sur un ecran d'ordinateur, toujours large. */
+function appareilTactile(){
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints||0) > 0;
+}
+
+function majOrientation(){
+  const voile=document.getElementById('voile-rotation'); if(!voile) return;
+  const enJeu = !!(G && (G.running || _enPause)) && !(G && G.demo);
+  /* Portrait impose partout : menus, boutique, carte et parties. Un ecran
+     d'ordinateur, lui, reste libre (il est large par nature). */
+  const gene  = estPaysage() && appareilTactile();
+  if(gene) verrouillerPortrait();
+  voile.classList.toggle('on', gene);
+  if(gene && enJeu && G && G.running && !_enPause){
+    _pausePaysage=true; mettreEnPause();          /* on ne laisse pas mourir le joueur */
+  } else if(!gene && _pausePaysage){
+    _pausePaysage=false;
+    if(_enPause) reprendrePartie();
+  }
+}
+
+window.addEventListener('resize', ()=>{ redimensionnerCanvas(); majOrientation(); });
+/* Premier contact : c'est le seul moment ou Android accepte le verrouillage. */
+['pointerdown','touchstart','click'].forEach(ev=>{
+  window.addEventListener(ev, tenterVerrouillageComplet, {passive:true});
+});
+verrouillerPortrait();
+setTimeout(majOrientation, 80);
+window.addEventListener('orientationchange', ()=>{
+  setTimeout(()=>{ redimensionnerCanvas(); majOrientation(); }, 220);   /* le temps que l'ecran se stabilise */
+});
+
+/* ============================================================
+   BAS DE PAGE — la barre d'onglets flotte au-dessus du contenu.
+   Un ::after CSS ne suffit pas : env(safe-area-inset-bottom) vaut 0
+   dans la WebView du Seeker et le padding d'un conteneur scrollable
+   y est ignore. On injecte donc un vrai element de fin dans chaque
+   ecran, une seule fois au demarrage.
+   ============================================================ */
+function poserFinsDePage(){
+  document.querySelectorAll('.screen').forEach(ec=>{
+    if(ec.classList.contains('game')) return;              /* l'ecran de jeu n'a pas d'onglets */
+    if(ec.querySelector(':scope > .fin-page')) return;      /* deja pose */
+    const sp=document.createElement('div');
+    sp.className='fin-page';
+    sp.setAttribute('aria-hidden','true');
+    ec.appendChild(sp);
+  });
+}
+
+/* ============================================================
+   FRAGMENTS DE CLÉ
+   Certains secteurs ne s'ouvrent plus par simple progression : il faut
+   une cle, et une cle se compose de trois fragments laches par des boss
+   precis. Le drop est volontairement rare, ce qui donne une raison de
+   refaire un boss deja battu.
+   ============================================================ */
+const CLES = {
+  genesis: {nom:'CLÉ GENESIS', couleur:'#14F195', boss:[4,6,7],    ouvre:9, slot:'cleGenesis',
+            desc:'Ouvre le secteur secret DÉBRIS OUBLIÉS'},
+  chaos:   {nom:'CLÉ DU CHAOS', couleur:'#e879f9', boss:[16,20,12], ouvre:19, slot:'cleChaos',
+            desc:'Ouvre le COFFRE GENESIS, verrouillé depuis la chute du Nexus'}
+};
+const CHANCE_FRAGMENT = 0.34;      /* par boss terrasse */
+
+function fragments(id){ return (S.cles && S.cles[id]) || 0; }
+function cleComplete(id){ return fragments(id) >= 3; }
+
+/* Appele quand un boss tombe : peut laisser un fragment */
+function tenterFragment(nodeId){
+  for(const [id,c] of Object.entries(CLES)){
+    if(!c.boss.includes(nodeId)) continue;
+    if(cleComplete(id)) continue;
+    if(Math.random() > CHANCE_FRAGMENT) {
+      setTimeout(()=>toast('Aucun fragment cette fois • '+c.nom+' '+fragments(id)+'/3',2600),1400);
+      return;
+    }
+    if(!S.cles) S.cles={};
+    S.cles[id]=fragments(id)+1;
+    save();
+    const n=fragments(id);
+    setTimeout(()=>{
+      if(n>=3){
+        toast('🔑 '+c.nom+' RECONSTITUÉE • '+c.desc,4600);
+        Audio2.jouerSfx('levelup'); haptique('victoire');
+      } else {
+        toast('🔩 Fragment de '+c.nom+' • '+n+'/3',3400);
+        Audio2.jouerSfx('pickup');
+      }
+    },1400);
+    return;
+  }
+}
+
+/* Les secteurs sous cle ne s'ouvrent qu'une fois la cle reconstituee */
+function noeudVerrouille(id){
+  for(const [cid,c] of Object.entries(CLES)){
+    if(c.ouvre===id && !cleComplete(cid)) return c;
+  }
+  return null;
+}
+
+/* ============================================================
+   PALIERS DE SCORE
+   Le score ne servait qu'a la fin. Il debloque maintenant des
+   avantages en direct, ce qui donne une raison de jouer offensif.
+   ============================================================ */
+const PALIERS = [
+  {pts:2500,  nom:'+1 VIE',            effet:g=>{ g.lives++; }},
+  {pts:6000,  nom:'BOMBE OFFERTE',     effet:g=>{ S.charges.nuke=(S.charges.nuke||0)+1; majBarreBonus(); }},
+  {pts:11000, nom:'SCORE ×1.5',        effet:g=>{ g.mode.reward*=1.5; }},
+  {pts:18000, nom:'MITRAILLEUSE',      effet:g=>{ S.charges.mitra=(S.charges.mitra||0)+1; majBarreBonus(); }},
+  {pts:28000, nom:'ESCORTE FANTÔME',   effet:g=>{ S.charges.ghost=(S.charges.ghost||0)+1; majBarreBonus(); }}
+];
+function verifierPaliers(g){
+  if(!g || g.arena) return;
+  const atteint=g.paliersAtteints||0;
+  if(atteint>=PALIERS.length) return;
+  const p=PALIERS[atteint];
+  if((g.score||0) >= p.pts){
+    g.paliersAtteints=atteint+1;
+    try{ p.effet(g); }catch(e){}
+    toast('⚡ PALIER '+p.pts.toLocaleString()+' • '+p.nom, 2600);
+    Audio2.jouerSfx('levelup'); haptique('bouton');
+    g.shake=Math.max(g.shake,10);
+  }
+}
+
+/* ============================================================
+   LANGUES — français par défaut, anglais disponible
+   Le jeu a été écrit en français. Plutôt que de tout réécrire avec des
+   clés abstraites, la table associe le texte français exact à sa version
+   anglaise : T('Boutique') renvoie 'Store' si la langue est l'anglais,
+   et le texte d'origine sinon. Les écrans statiques sont parcourus une
+   fois à la bascule, les textes générés passent par T().
+   ============================================================ */
+let LANGUE = 'fr';
+/* Table français -> anglais. Clé = le texte français exact du jeu. */
+const EN = {
+"SEEKER STRIKE": "SEEKER STRIKE",
+"Connecter le wallet": "Connect wallet",
+"SOL &bull; TON WALLET": "SOL &bull; YOUR WALLET",
+"GC &bull; CRÉDITS": "GC &bull; CREDITS",
+"MISSIONS": "MISSIONS",
+"CARTE DE CAMPAGNE": "CAMPAIGN MAP",
+"22 secteurs • 7 boss": "22 sectors • 10 bosses",
+"INFINI": "ENDLESS",
+"Tiens le plus longtemps": "Survive as long as you can",
+"ARENA": "ARENA",
+"Défi du jour & coop": "Daily challenge & co-op",
+"PROGRESSION": "PROGRESS",
+"Connexion quotidienne": "Daily login",
+"CLAIM": "CLAIM",
+"Wallet non connecté": "Wallet not connected",
+"ENVOYER 1 TX": "SEND 1 TX",
+"BASE": "BASE",
+"ARMORY": "ARMORY",
+"Améliorations & consommables": "Upgrades & consumables",
+"HANGAR": "HANGAR",
+"12 vaisseaux": "12 ships",
+"QUÊTES": "QUESTS",
+"Objectifs & secrets": "Objectives & secrets",
+"BESTIAIRE": "BESTIARY",
+"Fiches ennemis & boss": "Enemy & boss files",
+"RÈGLES DU JEU": "HOW TO PLAY",
+"Commandes, systèmes, économie": "Controls, systems, economy",
+"Record infini": "Endless record",
+"TRANSMISSION :": "TRANSMISSION:",
+"Le réseau Genesis attend tes ordres, pilote.": "The Genesis network awaits your orders, pilot.",
+"Accueil": "Home",
+"Carte": "Map",
+"Boutique": "Store",
+"Quêtes": "Quests",
+"Réglages": "Settings",
+"Ships": "Ships",
+"Règles": "Rules",
+"PRÉPARATION": "BRIEFING",
+"Briefing...": "Briefing...",
+"VAISSEAU": "SHIP",
+"MUNITIONS": "AMMO",
+"BONUS": "BONUS",
+"DIFFICULTÉ": "DIFFICULTY",
+"LANCER LA MISSION": "LAUNCH MISSION",
+"Retour": "Back",
+"Normal": "Normal",
+"Difficile": "Hard",
+"Extrême": "Extreme",
+"Facile": "Easy",
+"Explorateur": "Explorer",
+"Pilote": "Pilot",
+"Chasseur": "Fighter",
+"MISSION": "MISSION",
+"Combo": "Combo",
+"Frags": "Frags",
+"PAUSE": "PAUSE",
+"Vague": "Wave",
+"MODE INFINI": "ENDLESS MODE",
+"ARENA COOP": "CO-OP ARENA",
+"DÉFI DU JOUR": "DAILY CHALLENGE",
+"DURÉE": "DURATION",
+"RECORD": "RECORD",
+"LANCER LE DÉFI": "START CHALLENGE",
+"COOPÉRATION": "CO-OP",
+"ALLIÉ": "ALLY",
+"RESPAWN": "RESPAWN",
+"VICTOIRE": "VICTORY",
+"DÉPLOYER LE WINGMAN": "DEPLOY WINGMAN",
+"TES RECORDS": "YOUR RECORDS",
+"Un wingman IA combat à tes côtés. Il tire, il encaisse, il compte ses kills.": "An AI wingman fights at your side. It shoots, it takes hits, it counts its kills.",
+"AUDIO": "AUDIO",
+"CONFORT": "COMFORT",
+"LANGUE": "LANGUAGE",
+"Son": "Sound",
+"Musique": "Music",
+"Vibrations": "Haptics",
+"Particules": "Particles",
+"Volume musique": "Music volume",
+"Volume effets": "Effects volume",
+"VIDER LE CACHE": "CLEAR CACHE",
+"RÉINITIALISER": "RESET",
+"ZONE DANGER": "DANGER ZONE",
+"Continuer ?": "Continue?",
+"Annuler": "Cancel",
+"Confirmer": "Confirm",
+"Weapon Core": "Weapon Core",
+"Hyper Cycle": "Hyper Cycle",
+"Coque renforcée": "Reinforced Hull",
+"Aimant à butin": "Loot Magnet",
+"Lot complet": "Full Bundle",
+"Spread": "Spread",
+"Perforantes": "Piercing",
+"Hyper Rapid": "Hyper Rapid",
+"Kit de réparation": "Repair Kit",
+"Scan tactique": "Tactical Scan",
+"Surcharge": "Overload",
+"Standard": "Standard",
+"Équilibré": "Balanced",
+"Hauts dégâts": "High damage",
+"Tir large": "Wide spread",
+"Cadence extrême": "Extreme fire rate",
+"ÉQUIPÉ": "EQUIPPED",
+"ÉQUIPER": "EQUIP",
+"dégâts": "damage",
+"4 secteurs CHAOS sécurisés": "4 CHAOS sectors secured",
+"les 2 clés reconstituées": "both keys reassembled",
+"NEXUS PRIME terrassé": "NEXUS PRIME defeated",
+"CONTRAT": "CONTRACT",
+"PURGE": "PURGE",
+"TENIR": "HOLD OUT",
+"RENDEMENT": "YIELD",
+"SANS FAUTE": "FLAWLESS",
+"SOBRIÉTÉ": "SOBRIETY",
+"ENCHAÎNEMENT": "CHAIN",
+"CLÉS": "KEYS",
+"SECRETS": "SECRETS",
+"CLÉ GENESIS": "GENESIS KEY",
+"CLÉ DU CHAOS": "CHAOS KEY",
+"NOYAU DE DONNÉES": "DATA CORE",
+"ÉCLAT DE DONNÉES": "DATA SHARD",
+"+1 VIE": "+1 LIFE",
+"BOUCLIER 8s": "SHIELD 8s",
+"+1 MITRAILLEUSE": "+1 MINIGUN",
+"+1 BOMBE": "+1 BOMB",
+"+1 FANTÔME": "+1 GHOST",
+"Mission Failed": "Mission Failed",
+"Secteur sécurisé": "Sector secured",
+"REJOUER": "RETRY",
+"CONTINUER": "CONTINUE",
+"QUITTER": "QUIT",
+"TOURNE TON TÉLÉPHONE": "ROTATE YOUR PHONE",
+"MODE DÉVELOPPEUR": "DEVELOPER MODE",
+"TOUT DÉBLOQUER": "UNLOCK EVERYTHING",
+"REMETTRE À ZÉRO": "RESET PROGRESS",
+"Quitter le mode développeur": "Exit developer mode",
+"transactions": "transactions",
+"crédits": "credits",
+"QG Seeker": "Seeker HQ",
+"Éveil": "Awakening",
+"Champ d’astéroïdes": "Asteroid Field",
+"Périls": "Perils",
+"Vortex": "Vortex",
+"Nébuleuse": "Nebula",
+"Station Sigma": "Sigma Station",
+"Corruption": "Corruption",
+"QG Terre": "Earth HQ",
+"Débris Oubliés": "Forgotten Debris",
+"Redressement": "Recovery",
+"Point de rupture": "Breaking Point",
+"Nexus": "Nexus",
+"Brèche": "Breach",
+"Comptoir": "Trading Post",
+"Meute d’Élite": "Elite Pack",
+"Fracture": "Fracture",
+"Havre": "Haven",
+"Signal Inconnu": "Unknown Signal",
+"Coffre Genesis": "Genesis Vault",
+"Portail": "Portal",
+"NEXUS PRIME": "NEXUS PRIME",
+"Le QG te donne tes ordres.": "HQ hands you your orders.",
+"Premiers pas. Apprends à te déplacer et à tirer.": "First steps. Learn to move and shoot.",
+"Esquive et tir. Les débris ne pardonnent pas.": "Dodge and fire. The debris shows no mercy.",
+"Snipers en approche. Apprends à couper les lignes de tir.": "Snipers inbound. Learn to break their firing lines.",
+"Première spirale. Le Vortex t’attend.": "First spiral. The Vortex is waiting.",
+"Visibilité réduite. Fie-toi à tes réflexes.": "Reduced visibility. Trust your reflexes.",
+"Couloirs étroits, unités lourdes.": "Tight corridors, heavy units.",
+"Le signal inverse tes commandes. Tiens bon.": "The signal inverts your controls. Hold on.",
+"Point de repos. Réapprovisionnement complet.": "Rest point. Full resupply.",
+"Gravité zéro. Ton inertie devient ton ennemie.": "Zero gravity. Your own inertia turns against you.",
+"Tout ce que tu as appris, en simultané.": "Everything you have learned, all at once.",
+"Marathon. Aucun répit, aucune seconde chance.": "A marathon. No respite, no second chance.",
+"La fusion. Toutes les mécaniques, un seul adversaire.": "The fusion. Every mechanic, one opponent.",
+"Le Nexus est tombé. Quelque chose s’est ouvert derrière lui.": "The Nexus has fallen. Something opened behind it.",
+"Un marchand a survécu ici. Ses prix s’en ressentent.": "A trader survived here. His prices show it.",
+"Aucun rebut. Que des unités d’élite.": "No stragglers. Elite units only.",
+"Une première anomalie prend forme.": "A first anomaly takes shape.",
+"Une poche de calme. Profites-en, il n’y en aura plus.": "A pocket of calm. Enjoy it, there will be no other.",
+"Une émission non répertoriée. Impossible de savoir ce qu’elle cache.": "An unlisted transmission. No way to know what it hides.",
+"Une réserve intacte. Bien gardée.": "An untouched cache. Well guarded.",
+"Le Gardien veille sur le passage. Personne ne franchit sans payer.": "The Guardian watches the crossing. Nobody passes without paying.",
+"La forme originelle. Celle que le Nexus imitait.": "The original form. The one the Nexus was imitating.",
+"Tireur": "Gunner",
+"Kamikaze": "Kamikaze",
+"Tank": "Tank",
+"Diviseur": "Splitter",
+"Porteur de bouclier": "Shield Bearer",
+"Téléporteur": "Teleporter",
+"Poseur de mines": "Mine Layer",
+"Drone harceleur": "Harasser Drone",
+"Sniper élite": "Elite Sniper",
+"Tank corrompu": "Corrupted Tank",
+"Mine chercheuse": "Seeker Mine",
+"Mine dérivante": "Drifting Mine",
+"Chasseur zéro-G": "Zero-G Fighter",
+"Drone lourd": "Heavy Drone",
+"Intercepteur Chaos": "Chaos Interceptor",
+"Tireur Chaos": "Chaos Gunner",
+"Guêpe": "Wasp",
+"Colosse Chaos": "Chaos Colossus",
+"Essaimeur": "Swarmer",
+"Garde Blindé": "Armored Guard",
+"Spectre Chaos": "Chaos Wraith",
+"Semeur": "Sower",
+"VARIANTE": "VARIANT",
+"CHAOS": "CHAOS",
+"BOSS": "BOSS",
+"TOUS": "ALL",
+"GENESIS": "GENESIS",
+"Daily Streak": "Daily Streak",
+"Semaine complète": "Full Week",
+"Destroyer": "Destroyer",
+"Exterminateur": "Exterminator",
+"SEEKER TASK": "SEEKER TASK",
+"Campagne": "Campaign",
+"Genesis Complete": "Genesis Complete",
+"Chasseur de boss": "Boss Hunter",
+"Tueur de titans": "Titan Slayer",
+"Perfectionniste": "Perfectionist",
+"Sans pitié": "No Mercy",
+"Survivant": "Survivor",
+"Gladiateur": "Gladiator",
+"Ghost": "Ghost",
+"Protocole Chaos": "Chaos Protocol",
+"Origine": "Origin",
+"Enchaînement parfait": "Perfect Chain",
+"Pureté": "Purity",
+"Sans une égratignure": "Without a Scratch",
+"Archiviste": "Archivist",
+"Serrurier": "Locksmith",
+"Sous contrat": "Under Contract",
+"RÉCLAMER": "CLAIM",
+"RÉCLAMÉ": "CLAIMED",
+"En cours": "In progress",
+"SILENCE RADIO": "RADIO SILENCE",
+"VÉTÉRAN D’ARCADE": "ARCADE VETERAN",
+"DÉRIVE ZÉRO-G": "ZERO-G DRIFT",
+"CODE ORBITAL": "ORBITAL CODE",
+"Il paraît que certains pilotes coupent tout.": "They say some pilots turn everything off.",
+"Parfois, il suffit de regarder.": "Sometimes, watching is enough.",
+"Un secteur n’apparaît sur aucune carte officielle.": "One sector appears on no official map.",
+"Quatre coins. Sens horaire. Depuis le haut-gauche.": "Four corners. Clockwise. From the top left.",
+"APPUYER POUR COMMENCER": "TAP TO START",
+"SE DÉPLACER": "MOVEMENT",
+"Glisse ton doigt n'importe où sur l'écran : le vaisseau te suit dans toutes les directions. Au clavier : ZQSD ou les flèches.": "Slide your finger anywhere on screen: the ship follows in every direction. On keyboard: WASD or arrow keys.",
+"SUIVANT": "NEXT",
+"Passer": "Skip",
+"TOURNE TON TÉLÉPHONE": "TURN YOUR PHONE",
+"Seeker Strike se joue en mode portrait : le terrain vertical fait tout le gameplay. La partie reprend dès que tu reviens.": "Seeker Strike is played in portrait: the vertical playfield is the whole game. Your run resumes as soon as you turn back.",
+"🔗 Connecter le wallet": "🔗 Connect wallet",
+"SOL • TON WALLET": "SOL • YOUR WALLET",
+"GC • CRÉDITS": "GC • CREDITS",
+"jour(s) d’affilée": "day(s) in a row",
+"Seeker Task •": "Seeker Task •",
+"✅ ÉLIGIBLE": "✅ ELIGIBLE",
+"Une transaction mémo sur Solana devnet par appui. Tu signes dans ton wallet.": "One memo transaction on Solana devnet per tap. You sign in your wallet.",
+"♾️ Record infini": "♾️ Endless record",
+"← Home": "← Home",
+"CARTE GENESIS": "GENESIS MAP",
+"CHAOS ▶": "CHAOS ▶",
+"MODE": "MODE",
+"CHARGES": "CHARGES",
+"— utilisables en pleine partie": "— usable mid-run",
+"Score": "Score",
+"Kills": "Kills",
+"Wave": "Wave",
+"SHIPS": "SHIPS",
+"SECRETS —": "SECRETS —",
+"Les secrets non trouvés n’affichent qu’un indice.": "Undiscovered secrets only show a hint.",
+"Effets et musique": "Effects and music",
+"Ambiance": "Ambience",
+"📴 Vibrations": "📴 Haptics",
+"Retour haptique": "Haptic feedback",
+"✨ Particules": "✨ Particles",
+"Faible": "Low",
+"Élevé": "High",
+"REPRENDRE": "RESUME",
+"ABANDONNER LA MISSION": "ABORT MISSION",
+"Appuie sur une section pour la déplier": "Tap a section to expand it",
+"Chaque unité a un comportement. Apprends-les, ils ne changent jamais d'avis.": "Every unit has a behaviour. Learn them — they never change their mind.",
+"RÉGLAGES": "SETTINGS",
+"Langue du jeu": "Game language",
+"Interface, briefings, bestiaire et règles": "Interface, briefings, bestiary and rules",
+"Effets sonores et musique": "Sound effects and music",
+"Thèmes de menu, de combat et de boss": "Menu, combat and boss themes",
+"Retour haptique différencié par action": "Haptic feedback tuned per action",
+"Faible améliore les performances sur mobile": "Low improves performance on mobile",
+"⚠ ZONE DANGER": "⚠ DANGER ZONE",
+"Reset Run": "Reset Run",
+"Remet à zéro le compteur Seeker Task, le streak et le claim du jour. Recharge tes bonus. Achats, vaisseaux et campagne conservés.": "Resets the Seeker Task counter, the streak and today's claim. Refills your bonuses. Purchases, ships and campaign are kept.",
+"RÉINITIALISER LE RUN": "RESET RUN",
+"Reset Usine": "Factory Reset",
+"Efface toute la progression : GC, vaisseaux, munitions, campagne, charges, étoiles. Ton solde SOL n’est jamais touché — il vit dans ton wallet.": "Wipes all progress: GC, ships, ammo, campaign, charges, stars. Your SOL balance is never touched — it lives in your wallet.",
+"RESET USINE": "FACTORY RESET",
+/* --- Intro du lore, apres le tutoriel --- */
+"ARCHIVES GENESIS": "GENESIS ARCHIVES",
+"An 2140. Le réseau Genesis relie chaque monde habité.\nIl gère l'énergie, la mémoire, les échanges. Tout passe par lui.\nPuis les Chaos Nodes sont apparus. Des fragments de code devenus matière,\nqui dévorent les secteurs un par un et recrachent des machines hostiles.\nLes flottes ont échoué. Les IA ont capitulé.\nIl reste le Seed Vault — et un pilote assez fou pour y brancher son vaisseau.\nTu es un Seeker. Ta mission : remonter la chaîne jusqu'au Nexus.\nCe que tu trouveras là-bas n'a jamais été conçu pour être vu.": "Year 2140. The Genesis network links every inhabited world.\nIt runs the power, the memory, the trade. Everything goes through it.\nThen the Chaos Nodes appeared. Fragments of code turned matter,\ndevouring sectors one by one and spitting out hostile machines.\nThe fleets failed. The AIs surrendered.\nAll that is left is the Seed Vault — and a pilot mad enough to plug a ship into it.\nYou are a Seeker. Your mission: follow the chain back to the Nexus.\nWhat you find there was never meant to be seen.",
+/* --- Butin : libelles avec chiffres --- */
+"CADENCE x1.6 10s": "FIRE RATE x1.6 10s",
+"DÉGÂTS x1.5 12s": "DAMAGE x1.5 12s",
+"TRANSCENDANCE": "TRANSCENDENCE",
+/* --- Lore : transmissions entre les secteurs (cles generees depuis la source) --- */
+"TRANSMISSION": "TRANSMISSION",
+"APPUYER POUR CONTINUER": "PRESS TO CONTINUE",
+"QG SEEKER": "SEEKER HQ",
+"ANALYSTE VEGA": "ANALYST VEGA",
+"ALERTE": "ALERT",
+"NEXUS": "NEXUS",
+"NEXUS PRIME": "NEXUS PRIME",
+"Signal capté en périphérie. Faible, répétitif, artificiel.\nOn t'envoie voir. Reviens entier, pilote.": "Signal picked up on the rim. Faint, repeating, artificial.\nYou're going in. Come back in one piece, pilot.",
+"Le champ d'astéroïdes n'était pas là le mois dernier.\nQuelque chose a déplacé une ceinture entière. Reste mobile.": "That asteroid field wasn't there last month.\nSomething moved an entire belt. Keep moving.",
+"Leurs snipers apprennent. Ils anticipent nos trajectoires.\nCe ne sont plus des drones : ce sont des élèves.": "Their snipers are learning. They read our trajectories now.\nThese aren't drones any more: they're students.",
+"⚠ Masse anormale détectée. Rotation constante, PV hors échelle.\nLe VORTEX est le premier vrai nœud. Il ne bluffe pas.": "⚠ Abnormal mass detected. Constant rotation, HP off the scale.\nThe VORTEX is the first real node. It does not bluff.",
+"La nébuleuse brouille tes capteurs autant que les leurs.\nTu ne verras rien venir. Eux non plus — utilise ça.": "The nebula blinds your sensors as much as theirs.\nYou won't see anything coming. Neither will they — use that.",
+"Station Sigma était à nous. Ses tourelles aussi.\nElles répondent désormais à une autre voix.": "Sigma Station was ours. So were its turrets.\nThey answer to another voice now.",
+"⚠ Le signal s'infiltre dans ton système de vol.\nTes commandes vont s'inverser. Ce n'est pas une panne : c'est lui.": "⚠ The signal is bleeding into your flight system.\nYour controls will invert. This is not a fault: it is him.",
+"Tu as traversé la Corruption. Personne d'autre n'y était parvenu.\nRepose-toi ici. Le vrai gouffre commence après.": "You came through the Corruption. Nobody else ever did.\nRest here. The real abyss starts beyond.",
+"Gravité nulle. Ton vaisseau gardera son élan, toujours.\nCe champ de débris est un cimetière de Seekers. Ne deviens pas le suivant.": "Zero gravity. Your ship will keep its momentum, always.\nThis debris field is a Seeker graveyard. Don't be the next one.",
+"Ils ont copié nos tactiques et nous les renvoient toutes en même temps.\nTout ce que tu as appris, maintenant, d'un seul bloc.": "They copied our tactics and are sending them all back at once.\nEverything you learned, right now, all together.",
+"⚠ Aucun répit prévu au-delà de ce point.\nLe flux ne s'arrêtera pas. Toi non plus.": "⚠ No respite beyond this point.\nThe stream will not stop. Neither will you.",
+"TU AS SUIVI MA TRACE JUSQU'ICI.\nJE T'AI LAISSÉ FAIRE. J'AVAIS BESOIN D'UN PILOTE.\nMONTRE-MOI CE QUE TU AS APPRIS.": "YOU FOLLOWED MY TRAIL THIS FAR.\nI LET YOU. I NEEDED A PILOT.\nSHOW ME WHAT YOU HAVE LEARNED.",
+"Le Nexus n'était pas l'origine. Il copiait quelque chose.\nUne brèche s'est ouverte là où il est tombé.": "The Nexus was not the origin. It was copying something.\nA breach opened where it fell.",
+"⚠ Densité hostile hors normes. Aucun répit prévu.\nReste en mouvement, toujours.": "⚠ Hostile density off the charts. No respite scheduled.\nKeep moving, always.",
+"Une anomalie prend forme. Elle n'a pas de nom dans nos archives.\nOn l'appelle FRACTURE, faute de mieux.": "An anomaly is taking shape. It has no name in our archives.\nWe call it RIFT, for lack of anything better.",
+"Ni gravité, ni visibilité. Tes instruments ne servent plus à rien.\nIl te reste tes réflexes.": "No gravity, no visibility. Your instruments are useless now.\nAll you have left are your reflexes.",
+"⚠ Il a appris ta façon de voler. Il retourne tes commandes contre toi.\nCe n'est plus une machine : c'est un miroir.": "⚠ It learned the way you fly. It turns your controls against you.\nThis is no longer a machine: it is a mirror.",
+"Une réserve Genesis intacte, en pleine zone morte.\nQuelqu'un la garde. Prends ce que tu peux.": "An intact Genesis cache, deep in the dead zone.\nSomeone is guarding it. Take what you can.",
+"⚠ Portail instable. Il te mènera droit à la fin — sans aucun répit.\nTes commandes vont lâcher en chemin.": "⚠ Unstable portal. It leads straight to the end — with no respite.\nYour controls will fail on the way.",
+"TU AS DÉTRUIT MON REFLET.\nMAINTENANT TU ME VOIS.\nJE SUIS CE QU'IL VOULAIT DEVENIR.": "YOU DESTROYED MY REFLECTION.\nNOW YOU SEE ME.\nI AM WHAT IT WANTED TO BECOME.",
+"Paiement SKR disponible au lancement mainnet · utilise le SOL sur devnet": "SKR payment available at mainnet launch · use SOL on devnet",
+"mainnet": "mainnet",
+"Disponible au lancement mainnet": "Available at mainnet launch",
+"SKR disponible au lancement mainnet": "SKR available at mainnet launch",
+"BOOSTS RECHARGÉS": "BOOSTS RECHARGED",
+"ennemis abattus": "enemies destroyed",
+"BOSS TERRASSÉ — boosts rechargés": "BOSS DOWN — boosts recharged",
+"Ce boost est épuisé pour ce secteur": "This boost is spent for this sector",
+"Boost épuisé • encore {0} ennemis pour recharger": "Boost spent • {0} more enemies to recharge",
+"Boosts : 1 de chaque · recharge tous les {0} ennemis": "Boosts: 1 of each · recharge every {0} enemies",
+"SIGNATURE CHAOS DÉTECTÉE": "CHAOS SIGNATURE DETECTED",
+"Livrée Blueprint": "Blueprint livery",
+"Livrée Blueprint activée": "Blueprint livery on",
+"Couleurs d\u2019origine rétablies": "Original colours restored",
+"Activée": "On",
+"Désactivée": "Off",
+"Plafond de boosts atteint pour ce secteur ({0}/{0})": "Boost cap reached for this sector ({0}/{0})",
+"Difficile": "Hard",
+"Extrême": "Extreme",
+"1 seule fois": "once only",
+"Boosts : 1 de chaque · aucune recharge, sauf boss terrassé": "Boosts: 1 of each · no recharge, except on boss kill",
+"session wallet perdue, reconnecte-toi": "wallet session lost, reconnect",
+"Appuie une seconde fois sur le nœud pour lancer la mission.": "Tap the node once more to launch the mission.",
+"Annuler": "Cancel",
+"Connexion échouée": "Connection failed",
+"Bonus de bienvenue": "Welcome bonus",
+"Connecte un wallet pour envoyer des transactions": "Connect a wallet to send transactions",
+"Connecté": "Connected",
+"Wallet connecté • devnet": "Wallet connected • devnet",
+"Wallet non connecté": "Wallet not connected",
+"non connecté": "not connected",
+"Connecte ton wallet : ce palier se gagne on-chain": "Connect your wallet: this tier is earned on-chain",
+"Mitrailleuse": "Minigun",
+"Bombe Nucléaire": "Nuclear Bomb",
+"Fantôme": "Ghost",
+"Cadence extrême 18s": "Extreme fire rate 18s",
+"Détruit tout à l’écran": "Destroys everything on screen",
+"Vaisseau allié 22s": "Allied ship 22s",
+/* --- Terminal de bord de la carte --- */
+"non recueilli": "not collected",
+"SECTEUR": "SECTOR",
+"wallet": "wallet",
+"simulation": "simulation",
+"nom": "name",
+"type": "type",
+"boucle": "loop",
+"statut": "status",
+"sécurisé": "secured",
+"accessible": "accessible",
+"verrouillé": "locked",
+"étoiles": "stars",
+"vagues": "waves",
+"boss": "boss",
+"aucun": "none",
+"contrat": "contract",
+"mécanique": "modifier",
+"Données tactiques indisponibles : secteur jamais parcouru.": "Tactical data unavailable: sector never entered.",
+/* --- Panneaux des reglages : chaines construites en JS --- */
+"Se débloque à 5 transactions on-chain ({0}/5).": "Unlocks at 5 on-chain transactions ({0}/5).",
+"{0} transactions confirmées • {1} dernières conservées": "{0} confirmed transactions • last {1} kept",
+"Chaque palier ne donne que du cosmétique ou du prestige : aucune récompense ne rend le vaisseau plus fort.": "Every tier grants cosmetics or prestige only: no reward makes your ship stronger.",
+"Progression : {0} TX": "Progress: {0} TX",
+"Merci • tu as donné {0}": "Thank you • you gave {0}",
+" et ": " and ",
+"MODE DÉVELOPPEUR": "DEVELOPER MODE",
+"Raccourcis de démonstration. Aucun effet on-chain : seuls les crédits de jeu et la progression locale changent.": "Demo shortcuts. No on-chain effect: only in-game credits and local progress change.",
+"TOUT DÉBLOQUER": "UNLOCK EVERYTHING",
+"REMETTRE À ZÉRO": "RESET TO ZERO",
+"Quitter le mode développeur": "Exit developer mode",
+"Le Nexus n'a jamais été conçu pour garder quoi que ce soit. Il a été conçu pour <b>signer</b>. Chaque secteur que tu sécurises écrit une ligne dans un registre que personne ne peut réécrire — pas même ceux qui l'ont bâti.<br><br>C'est pour ça qu'ils ont coupé la Boucle. Pas pour t'arrêter : pour effacer la preuve. Ils ont oublié qu'un registre distribué n'a pas de centre à détruire.<br><br><i>— fragment récupéré sur l'épave du vaisseau-archive SEEKER-00</i>": "The Nexus was never built to keep anything. It was built to <b>sign</b>. Every sector you secure writes a line into a ledger nobody can rewrite — not even the people who built it.<br><br>That is why they cut the Loop. Not to stop you: to erase the proof. They forgot that a distributed ledger has no centre to destroy.<br><br><i>— fragment recovered from the wreck of the archive ship SEEKER-00</i>",
+"Orbe pulsant avec halo : le tir le plus visible du jeu. Ne s'achète pas, ne se gagne dans aucun secteur. Certains pilotes jurent l'avoir trouvé sans quitter l'accueil.": "A pulsing orb with a halo: the most readable shot in the game. It cannot be bought and drops in no sector. Some pilots swear they found it without ever leaving the home screen.",
+"Le protocole fantôme dort quelque part sur l\u2019accueil…": "The ghost protocol sleeps somewhere on the home screen…",
+"Logo de l\u2019accueil tapé 7×": "Home screen logo tapped 7×",
+/* --- Noms de boss du bestiaire --- */
+"\u2622 VORTEX": "\u2622 VORTEX",
+"\u2622 SENTINELLE / CORRUPTION": "\u2622 SENTINEL / CORRUPTION",
+"\u2622 NEXUS": "\u2622 NEXUS",
+"\u2622 FRACTURE": "\u2622 RIFT",
+"\u2622 L\u2019ESSAIMEUR": "\u2622 THE SWARMER",
+"\u2622 LE COLOSSE": "\u2622 THE COLOSSUS",
+"\u2622 L\u2019ORACLE": "\u2622 THE ORACLE",
+"\u2622 LE GARDIEN": "\u2622 THE GUARDIAN",
+"\u2622 NEXUS PRIME": "\u2622 NEXUS PRIME",
+/* --- Paliers on-chain --- */
+"ARMURIER": "ARMORER",
+"ARCHIVISTE": "ARCHIVIST",
+"PROPULSION LIBRE": "FREE THRUST",
+"ARCHITECTE": "ARCHITECT",
+"45 TX on-chain": "45 on-chain TX",
+"75 TX on-chain": "75 on-chain TX",
+"120 TX on-chain": "120 on-chain TX",
+"150 TX on-chain • le rang de prestige": "150 on-chain TX • the prestige rank",
+"Munition signature — un tir au visuel exclusif": "Signature round — an exclusive shot visual",
+"Transmission classifiée — un chapitre de lore et la piste CHAOS en menu": "Classified transmission — a lore chapter and the CHAOS track in the menu",
+"Traînée de réacteur — couleur de propulsion au choix": "Engine trail — pick your thruster colour",
+"Rang ARCHITECTE — titre exclusif et carte aux couleurs Genesis": "ARCHITECT rank — exclusive title and Genesis-tinted map",
+"PALIERS ON-CHAIN": "ON-CHAIN TIERS",
+"JOURNAL ON-CHAIN": "ON-CHAIN LOG",
+"SOUTENIR LE JEU": "SUPPORT THE GAME",
+"Ton indicatif": "Your callsign",
+"Traînée de réacteur": "Engine trail",
+"Émeraude": "Emerald",
+"Or": "Gold",
+"Cyan": "Cyan",
+"Braise": "Ember",
+"Violet": "Violet",
+"Progression : ": "Progress: ",
+"Chaque palier ne donne que du cosmetique ou du prestige : aucune récompense ne rend le vaisseau plus fort.": "Every tier grants cosmetics or prestige only: no reward makes your ship stronger.",
+"Aucune signature enregistrée.": "No signature recorded yet.",
+"Adresse copiée": "Address copied",
+"Indicatif verrouillé": "Callsign locked",
+"Traînée verrouillée": "Trail locked",
+"Propulsion modifiée": "Thruster updated",
+"Connecte un vrai wallet : les TX simulées ne comptent pas": "Connect a real wallet: simulated TX do not count",
+/* --- Dons --- */
+"Don en SOL": "Donate SOL",
+"Don en SKR": "Donate SKR",
+"COPIER": "COPY",
+"Entièrement facultatif. Aucun don ne débloque quoi que ce soit en jeu — ni vaisseau, ni bonus, ni avantage. Le jeu reste identique si tu ne donnes jamais.": "Entirely optional. No donation unlocks anything in game — no ship, no bonus, no advantage. The game is identical if you never give.",
+"Connecte ton wallet d\'abord": "Connect your wallet first",
+"Le don demande un vrai wallet": "Donating requires a real wallet",
+"Transaction en cours…": "Transaction in progress…",
+/* --- Easter egg DEVNET --- */
+"SI J’ÉTAIS DEV": "IF I WERE A DEV",
+"Le réseau sur lequel tu joues est écrit quelque part. Insiste.": "The network you are playing on is written somewhere. Keep tapping.",
+"Mot DEVNET tapé 5 fois dans les réglages.": "Tapped the word DEVNET 5 times in settings.",
+"🔒 Accès développeur refusé. Mais on t’a fait un badge.": "🔒 Developer access denied. But we made you a badge.",
+"🖥️ Terminal de bord + livrée Blueprint + indicatif STAGIAIRE": "🖥️ Onboard terminal + Blueprint livery + INTERN callsign",
+"Tu as déjà le badge. Le vrai accès, toujours pas.": "You already have the badge. Real access, still no.",
+"STAGIAIRE": "INTERN",
+"SPECTRE": "WRAITH",
+"NOMADE": "NOMAD",
+"SENTINELLE": "SENTINEL",
+"ORACLE": "ORACLE",
+"VECTEUR": "VECTOR",
+"FANTOME": "PHANTOM",
+"ARCHIVE // PROTOCOLE GENESIS": "ARCHIVE // GENESIS PROTOCOL",
+"PREMIER CONTACT": "FIRST CONTACT",
+"PILOTE CONFIRMÉ": "SEASONED PILOT",
+"VÉTÉRAN DU RÉSEAU": "NETWORK VETERAN",
+"OPÉRATEUR GENESIS": "GENESIS OPERATOR",
+"VALIDATEUR": "VALIDATOR",
+"5 TX on-chain • ouvre le journal des signatures": "5 on-chain TX • opens the signature log",
+"30 TX on-chain": "30 on-chain TX",
+"60 TX on-chain": "60 on-chain TX",
+"90 TX on-chain": "90 on-chain TX",
+"100 TX on-chain • le rang ultime": "100 on-chain TX • the final rank",
+"Journal on-chain — tes transactions, avec lien vers Solscan": "On-chain log — your transactions, linked to Solscan",
+"Badge ÉLIGIBLE": "ELIGIBLE badge",
+"Livrée chromée — teinte alternative sur ton vaisseau": "Chrome livery — alternate tint on your ship",
+"Indicatif de pilote — un titre affiché en fin de partie": "Pilot callsign — a title shown on the results screen",
+"Thème HUD Genesis — interface or et violet": "Genesis HUD theme — gold and purple interface",
+"Rang VALIDATEUR — badge permanent et livrée dorée": "VALIDATOR rank — permanent badge and gold livery",
+"ENVOYER LES 15 TX": "SEND ALL 15 TX",
+"TX échouée": "TX failed",
+"Serveur Solana (RPC)": "Solana server (RPC)",
+"Le serveur public est souvent saturé. Colle ton propre endpoint devnet (Helius, QuickNode, Alchemy — offre gratuite suffisante) : il sera utilisé en priorité.": "The public server is often throttled. Paste your own devnet endpoint (Helius, QuickNode, Alchemy — the free tier is plenty): it will be used first.",
+"TESTER": "TEST",
+"ENREGISTRER": "SAVE",
+"EFFACER": "CLEAR",
+"Serveur actif": "Active server",
+"écarté(s)": "dropped",
+"Adresse invalide : elle doit commencer par https://": "Invalid address: it must start with https://",
+"Serveur enregistré": "Server saved",
+"Retour aux serveurs publics": "Back to public servers",
+"Test en cours": "Testing",
+"web3.js indisponible": "web3.js unavailable",
+"Répond en": "Responds in",
+"réseau devnet indisponible, réessaie dans 1 minute": "devnet network unavailable, try again in a minute",
+"serveur RPC indisponible, bascule automatique": "RPC server unavailable, switching automatically",
+"RPC refuse l'accès (clé requise) · bascule automatique": "RPC denied access (key required) · switching automatically",
+"RELANCER LES 15 TX": "RESEND ALL 15 TX",
+"ENVOYER LES 15 TX": "SEND ALL 15 TX",
+"PATIENTE": "WAIT",
+"SIGNATURE EN COURS…": "SIGNING…",
+"le wallet n'a pas répondu, réessaie": "the wallet did not respond, try again",
+"session wallet perdue, reconnecte-toi": "wallet session lost, reconnect",
+"le wallet n'a pas répondu · vérifie le journal avant de relancer": "the wallet did not respond · check the journal before resending",
+"transaction déjà envoyée, patiente un instant": "transaction already sent, wait a moment",
+"le wallet a refusé sans préciser la raison": "the wallet declined without giving a reason",
+"Patiente": "Hold on",
+"le réseau devnet limite les envois": "the devnet network throttles sends",
+"reseau devnet saturé, patiente quelques secondes": "devnet network is busy, wait a few seconds",
+"transaction expirée, relance-la": "transaction expired, send it again",
+"solde SOL devnet insuffisant": "not enough devnet SOL",
+"signature refusée dans le wallet": "signature declined in the wallet",
+"Les 15 mémos partent groupés dans <b>une seule transaction</b> Solana devnet : tu ne signes qu\u2019une fois. Relançable quand tu veux. Un soutien de 0.001 SOL est inclus \u2014 le gameplay, lui, reste 100% GC.": "All 15 memos ship together in <b>a single</b> Solana devnet transaction: you sign once. Replay it whenever you like. A 0.001 SOL tip is included \u2014 gameplay itself stays 100% GC.",
+"Reset Cache": "Clear Cache",
+"Vide tout le stockage local, y compris les préférences, et recharge la page.": "Clears all local storage, preferences included, and reloads the page.",
+"Confirmation": "Confirmation",
+"Home": "Home",
+"Arena": "Arena",
+"Shop": "Shop",
+"Glisse ton doigt n'importe où sur l'écran : le vaisseau suit dans les 8 directions, y compris en diagonale.\n\nAu clavier : ZQSD, WASD ou les flèches.": "Slide your finger anywhere on screen: the ship follows in all 8 directions, diagonals included.\n\nOn keyboard: WASD or arrow keys.",
+"TIRER": "SHOOTING",
+"Le tir part tout seul, en continu. Tu n'as aucun bouton à presser.\n\nTout se joue au placement : coupe les lignes de tir, contourne les boucliers, ne reste jamais immobile.": "You fire automatically, without stopping. There is no shoot button.\n\nEverything is about placement: break their firing lines, flank the shields, never stand still.",
+"CONNAÎTRE L’ENNEMI": "KNOW YOUR ENEMY",
+"DIFFICULTÉ ET ÉTOILES": "DIFFICULTY AND STARS",
+"OBJECTIF": "OBJECTIVE",
+"COMMENCER": "START",
+"Cadence extrême 18s": "Extreme fire rate 18s",
+"Détruit tout à l’écran": "Clears the whole screen",
+"Vaisseau allié 22s": "Allied ship 22s",
+"+1 niveau d’arme (actuel : ": "+1 weapon level (current: ",
+"Cadence +20% définitive": "+20% fire rate, permanent",
+"+1 vie de départ (max 3)": "+1 starting life (max 3)",
+"Rayon de ramassage +60%": "+60% pickup radius",
+"En stock : ": "In stock: ",
+"2 mitrailleuses + 1 bombe + 1 fantôme": "2 miniguns + 1 bomb + 1 ghost",
+"+2 vies": "+2 lives",
+"Drops ×1.5": "Drops ×1.5",
+"Dégâts ×1.3": "Damage ×1.3",
+"Débloquée": "Unlocked",
+"Tir large \u00b7 5 projectiles \u00b7 faible sur cible unique": "Wide spread, 5 projectiles",
+"Rapide, il corrige sa trajectoire pour te suivre latéralement. Peu de PV : élimine-le tôt ou esquive de côté.": "Fast, it adjusts course to track you sideways. Low HP: kill it early or dodge sideways.",
+"Se poste en haut d'écran et lache des rafales de 3. Ne reste jamais dans son axe vertical.": "Holds the top of the screen and fires bursts of 3. Never sit in its vertical line.",
+"Descend, puis fonce droit sur toi et explose au contact. Casse sa course avant qu'il ne s'amorce.": "Drops in, then charges straight at you and explodes on contact. Break its run before it arms.",
+"Lent, très résistant, large. Il ne te vise pas : il occupe l'espace et te pousse à la faute.": "Slow, very tough, wide. It doesn't aim at you: it takes up space and forces your mistakes.",
+"À sa mort, il se scinde en deux fragments plus rapides. Ne le tue pas dans un moment chargé.": "On death it splits into two faster fragments. Don't kill it in a crowded moment.",
+"Un arc d'énergie protège la face qu'il te présente : tes tirs y sont renvoyés. Contourne-le.": "An energy arc shields the face it turns to you: your shots bounce off. Flank it.",
+"Disparaît puis réapparaît au-dessus ou en dessous de toi. Impossible de camper une position.": "Vanishes then reappears above or below you. Camping one spot won't work.",
+"Sème des mines fixes qui persistent. Il réduit ton terrain à chaque passage.": "Drops static mines that linger. It shrinks your playfield with every pass.",
+"Il ne fonce jamais. Il se poste sur un flanc à ta hauteur, tire en diagonale, et change de côté dès que tu t'approches. Il faut aller le chercher, sinon il te grignote.": "It never charges. It holds a flank at your height, fires diagonally, and switches sides as soon as you close in. Go get it, or it will wear you down.",
+"Tireur d'élite : lance d'énergie fine, cadence accrue.": "Marksman: thin energy lance, higher fire rate.",
+"Tank contaminé : PV largement supérieurs.": "Contaminated tank: far higher HP.",
+"Elle s'amorce tôt puis fonce droit sur toi. Abats-la avant qu'elle ne charge.": "It arms early, then charges straight at you. Kill it before it commits.",
+"Semée par le Poseur. Elle descend lentement, accélère, puis s'éteint. Elle réduit ton terrain.": "Dropped by the Layer. It sinks slowly, picks up speed, then burns out. It shrinks your playfield.",
+"Trajectoire irrégulière, très difficile à anticiper.": "Erratic path, very hard to read.",
+"La forme la plus blindée du réseau. Prévois tes charges de bonus.": "The most armoured form on the network. Save your bonus charges.",
+"BOSS — PV ×5. Spirale continue de disques tranchants, rotation permanente. Reste en mouvement circulaire.": "BOSS — HP ×5. Endless spiral of cutting discs, constant rotation. Keep circling.",
+"BOSS — PV ×8 à ×10. Croix rotative de missiles et invocations. Au nœud 7, il inverse tes commandes.": "BOSS — HP ×8 to ×10. Rotating missile cross and summons. On node 7 it inverts your controls.",
+"BOSS FINAL — PV ×16, 3 phases. Alterne spirale, croix et éventail. Change d'apparence à chaque phase.": "FINAL BOSS — HP ×16, 3 phases. Alternates spiral, cross and fan. Changes shape every phase.",
+"Le chasseur, en pire. Mêmes trois tactiques, mais 2× plus de PV et une vitesse de piqué supérieure.": "The fighter, but worse. Same three tactics, twice the HP and a faster dive.",
+"Se poste plus haut et tient sa position plus longtemps. Ses rafales arrivent quand tu ne l'attends plus.": "Holds higher and stays longer. Its bursts land when you've stopped expecting them.",
+"Kamikaze léger mais nerveux. Il s'amorce tôt et corrige sa course pendant tout le vol.": "Light but twitchy kamikaze. Arms early and corrects course all the way in.",
+"PV ×2,4. Il ne te vise pas, il te prive d'espace. Passe derrière lui plutôt que de le percer.": "HP ×2.4. It doesn't aim at you, it denies you space. Go around rather than through.",
+"À sa mort il libère deux fragments rapides. Choisis le moment où tu l'abats.": "On death it releases two fast fragments. Pick your moment.",
+"Bouclier frontal qui renvoie tes tirs. La seule ouverture est sur ses flancs.": "Frontal shield that reflects your fire. The only opening is on its flanks.",
+"Téléporteur d'élite. Il réapparaît systématiquement dans ton angle mort.": "Elite teleporter. It always reappears in your blind spot.",
+"Tapisse le terrain de mines persistantes. Chaque passage réduit ta zone de jeu.": "Carpets the field with lasting mines. Every pass shrinks your space.",
+"BOSS — PV ×17, 3 formes. Croix rotative resserrée. Première anomalie stable du Chaos Protocol.": "BOSS — HP ×17, 3 forms. Tightened rotating cross. First stable anomaly of the Chaos Protocol.",
+"BOSS — PV ×6, 2 phases. Éventail de projectiles et invocations continues. Le premier vrai mur de Genesis.": "BOSS — HP ×6, 2 phases. Projectile fan and constant summons. Genesis' first real wall.",
+"BOSS — PV ×12, 2 phases. Croix rotative, aucune invocation : c’est un duel de placement pur.": "BOSS — HP ×12, 2 phases. Rotating cross, no summons: a pure positioning duel.",
+"BOSS — PV ×18, 2 phases. Spirale rapide et invocations. Il lit tes déplacements avant toi.": "BOSS — HP ×18, 2 phases. Fast spiral and summons. It reads your moves before you make them.",
+"BOSS — PV ×19, 2 phases, invocations. Il garde le portail et inverse tes commandes. Le dernier verrou avant NEXUS PRIME.": "BOSS — HP ×19, 2 phases, summons. It guards the portal and inverts your controls. The last lock before NEXUS PRIME.",
+"BOSS ULTIME — PV ×26, 5 formes successives. Chaque mue change son pattern et son apparence. Le Nexus n'en était qu'une copie.": "ULTIMATE BOSS — HP ×26, 5 successive forms. Each moult changes its pattern and looks. The Nexus was only a copy.",
+"3 jours de suite": "3 days in a row",
+"7 jours de suite": "7 days in a row",
+"100 ennemis détruits": "100 enemies destroyed",
+"500 ennemis détruits": "500 enemies destroyed",
+"15 TX on-chain • activité Solana": "15 on-chain TX • Solana activity",
+"5 secteurs sécurisés": "5 sectors secured",
+"12 secteurs sécurisés": "12 sectors secured",
+"Vortex, Corruption, Nexus": "Vortex, Corruption, Nexus",
+"Les 10 boss du jeu terrassés": "All 10 bosses defeated",
+"20 étoiles cumulées": "20 stars earned",
+"3 nœuds en Extrême": "3 nodes on Extreme",
+"Vague 10 en Infini": "Wave 10 in Endless",
+"3 défis Arena remportés": "3 Arena challenges won",
+"Tape le logo 7×": "Tap the logo 7×",
+"4 secteurs de CHAOS sécurisés": "4 CHAOS sectors secured",
+"Terrasser NEXUS PRIME": "Defeat NEXUS PRIME",
+"Atteindre le combo maximum ×6": "Reach max combo ×6",
+"2 boss vaincus sans aucun bonus": "2 bosses beaten without a single bonus",
+"5 secteurs sans perdre de vie": "5 sectors without losing a life",
+"Découvrir les 4 secrets": "Find all 4 secrets",
+"Reconstituer les 2 clés": "Reassemble both keys",
+"8 contrats de secteur remplis": "8 sector contracts completed",
+"Détruire ": "Destroy ",
+"Survivre ": "Survive ",
+"Atteindre ": "Reach ",
+"Atteindre le combo ×": "Reach combo ×",
+"Terminer sans perdre de vie": "Finish without losing a life",
+"Terminer sans utiliser de bonus": "Finish without using a bonus",
+" unités": " units",
+" secondes": " seconds",
+" points": " points",
+"L'HISTOIRE": "THE STORY",
+"SE DÉPLACER ET TIRER": "MOVING AND SHOOTING",
+"CAMPAGNE — 13 SECTEURS": "CAMPAIGN — 13 SECTORS",
+"MÉCANIQUES SPÉCIALES": "SPECIAL MECHANICS",
+"ÉVÉNEMENTS ET BUTIN": "EVENTS AND LOOT",
+"AUTRES MODES": "OTHER MODES",
+"ÉCONOMIE": "ECONOMY",
+"An 2140. Le réseau <b>Genesis</b> relie tous les mondes habités.<br><br>Les <b>Chaos Nodes</b> — du code devenu matière — dévorent les secteurs un par un. Les flottes ont échoué, les IA ont capitulé.<br><br>Tu es un <b>Seeker</b>. Remonte la chaîne jusqu'au Nexus.": "Year 2140. The <b>Genesis</b> network links every inhabited world.<br><br>The <b>Chaos Nodes</b> — code turned matter — are devouring the sectors one by one. Fleets have failed, the AIs have surrendered.<br><br>You are a <b>Seeker</b>. Follow the chain back to the Nexus.",
+"Glisse ton doigt n'importe où : le vaisseau suit dans les <b>8 directions</b>, et reste toujours au-dessus de ton doigt.<br><br>Au clavier : <b>ZQSD</b>, WASD ou les flèches. <b>Échap</b> ou <b>P</b> pour la pause.<br><br><b>Le tir est automatique.</b> Tout se joue au placement.": "Slide your finger anywhere: the ship follows in all <b>8 directions</b>, always staying above your finger.<br><br>On keyboard: <b>WASD</b> or arrow keys. <b>Esc</b> or <b>P</b> to pause.<br><br><b>Firing is automatic.</b> Everything is about positioning.",
+"Trois boucles de progression :<br><br><b style='color:#67e8f9'>GENESIS</b> (1–4) découverte<br><b style='color:#c4b5fd'>APOCRYPHA</b> (5–8) maîtrise<br><b style='color:#f87171'>TRANSCENDANCE</b> (9–12) expert<br><br>Battre le <b>Vortex</b> ouvre la boucle 2, la <b>Corruption</b> ouvre la boucle 3.": "Three progression loops:<br><br><b style='color:#67e8f9'>GENESIS</b> (1–4) discovery<br><b style='color:#c4b5fd'>APOCRYPHA</b> (5–8) mastery<br><b style='color:#f87171'>TRANSCENDENCE</b> (9–12) expert<br><br>Beating the <b>Vortex</b> opens loop 2, <b>Corruption</b> opens loop 3.",
+"<b>N5 Nébuleuse</b> — visibilité réduite<br><b>N7 Corruption</b> — commandes inversées<br><b>N8 QG Terre</b> — réapprovisionnement complet<br><b>N9 Débris</b> — gravité zéro, inertie<br><b>N11 Rupture</b> — flux continu, aucun répit<br><b>N12 Nexus</b> — boss à 3 phases": "<b>N5 Nebula</b> — reduced visibility<br><b>N7 Corruption</b> — inverted controls<br><b>N8 Earth HQ</b> — full resupply<br><b>N9 Debris</b> — zero gravity, inertia<br><b>N11 Breaking Point</b> — constant flow, no respite<br><b>N12 Nexus</b> — 3-phase boss",
+"<b>8 comportements</b> distincts, plus 5 variantes renforcées.<br><br>Le <b>porteur de bouclier</b> renvoie tes tirs de face : contourne-le. Le <b>diviseur</b> se scinde en deux à sa mort. Le <b>téléporteur</b> réapparaît derrière toi.<br><br>Le <b>Bestiaire</b> détaille chacun d'eux.": "<b>8 distinct behaviours</b>, plus 5 reinforced variants.<br><br>The <b>shield bearer</b> reflects frontal fire: flank it. The <b>splitter</b> breaks in two on death. The <b>teleporter</b> reappears behind you.<br><br>The <b>Bestiary</b> details every one of them.",
+"Toutes les 3 à 4 vagues : pluie de météores, blackout, invasion latérale, essaim, ou <b>chasse</b> (cible dorée, 180 points).<br><br>Les ennemis lâchent du butin : vies, bouclier, cadence, dégâts, charges de bonus et crédits. Approche-toi, il vient à toi.": "Every 3 to 4 waves: meteor shower, blackout, flank invasion, swarm, or a <b>hunt</b> (golden target, 180 points).<br><br>Enemies drop loot: lives, shield, fire rate, damage, bonus charges and credits. Get close and it comes to you.",
+"🔫 <b>Mitrailleuse</b> — cadence extrême 18 s<br>☢️ <b>Bombe</b> — nettoie l'écran<br>👻 <b>Fantôme</b> — escorte de 2 alliés, 22 s<br><br>Utilisables <b>en pleine partie</b>, autant de fois que tu as de charges.": "🔫 <b>Minigun</b> — extreme fire rate 18s<br>☢️ <b>Bomb</b> — clears the screen<br>👻 <b>Ghost</b> — escort of 2 allies, 22s<br><br>Usable <b>mid-run</b>, as often as you have charges.",
+"<b>♾️ Infini</b> — vagues sans fin, mini-boss tous les 5 tours.<br><br><b>⚔️ Arena</b> — défi quotidien, le même pour tous. Bonus de 50 % si tu tiens le temps.<br><br><b>🤖 Arena Coop</b> — un wingman IA combat à tes côtés. Qui fera le plus de kills ?": "<b>♾️ Endless</b> — endless waves, a mini-boss every 5 rounds.<br><br><b>⚔️ Arena</b> — daily challenge, the same for everyone. 50% bonus if you last the distance.<br><br><b>🤖 Co-op Arena</b> — an AI wingman fights at your side. Who gets the most kills?",
+"<b>GC (Genesis Credits)</b> — la monnaie du jeu. Gagnée <b>uniquement en jouant</b>. Ne s'achète pas, n'existe pas sur la blockchain.<br><br>Tu commences avec <b>900 GC</b> : de quoi t'équiper d'un consommable dès la première partie. Le GC paie la boutique, les munitions et les consommables — tout le gameplay.<br><br><b>SOL</b> et <b>SKR</b> — ce sont <b>tes</b> tokens. Le jeu ne t'en donne jamais et n'y touche jamais sans ta signature. Ils servent uniquement à acheter des vaisseaux, au choix, à raison d'environ <b>1 SOL = 25 000 SKR</b>. Six vaisseaux sont payants ; cinq autres se méritent en jeu et ne coûtent rien.<br><br>Le <b>SKR</b> est le token officiel de <b>Solana Mobile</b>. Le jeu n'en distribue pas : il se gagne ou s'achète en dehors du jeu.<br><br><span style='color:#fbbf24'>Tout se joue sur le devnet — aucune valeur réelle engagée.</span>": "<b>GC (Genesis Credits)</b> — the in-game currency. Earned <b>by playing only</b>. Cannot be bought, does not exist on-chain.<br><br>You start with <b>900 GC</b>: enough for one consumable on your very first run. GC pays for the shop, ammo and consumables — all of the gameplay.<br><br><b>SOL</b> and <b>SKR</b> — these are <b>your</b> tokens. The game never gives you any and never touches them without your signature. They only buy ships, your choice of either, at roughly <b>1 SOL = 25,000 SKR</b>. Six ships are paid; five more are earned in game and cost nothing.<br><br><b>SKR</b> is the official <b>Solana Mobile</b> token. The game does not distribute it: you earn it or buy it outside the game.<br><br><span style='color:#fbbf24'>Everything runs on devnet — no real value at stake.</span>",
+"<b>15 transactions on-chain</b> pour maximiser ton activité Solana, en vue de l'airdrop <b>SKR de Solana Mobile</b>.<br><br>Chaque claim quotidien, achat ou déblocage envoie une transaction signée par ton wallet. Le compteur affiche les transactions <b>réellement confirmées</b>.": "<b>15 on-chain transactions</b> to maximise your Solana activity, with the <b>Solana Mobile SKR</b> airdrop in mind.<br><br>Each tap sends a memo transaction signed by your wallet. The counter shows <b>confirmed</b> transactions only.",
+"échoué": "failed",
+"intact": "clean",
+"aucun": "none",
+"CONTRAT • ": "CONTRACT • ",
+"Déjà rempli — la récompense reste acquise une seule fois.": "Already completed — the reward is granted only once.",
+"+2 Mitrailleuse": "+2 Minigun",
+"+1 Bombe": "+1 Bomb",
+"+1 Fantôme": "+1 Ghost",
+"+1 niveau d’arme": "+1 weapon level",
+"actuel": "current",
+"En stock": "In stock",
+"Secteur terminé avec le son ET la musique coupés.": "Sector cleared with both sound AND music muted.",
+"Laissé la démo tourner sur ses quatre mondes sans y toucher.": "Let the demo run through all four worlds untouched.",
+"Débris Oubliés sécurisé — le nœud secret de Genesis.": "Forgotten Debris secured — Genesis' hidden node.",
+"Séquence des quatre coins saisie sur l’accueil.": "Four-corner sequence entered on the home screen.",
+"Ouvre le secteur secret DÉBRIS OUBLIÉS": "Opens the hidden FORGOTTEN DEBRIS sector",
+"Ouvre le COFFRE GENESIS, verrouillé depuis la chute du Nexus": "Opens the GENESIS VAULT, sealed since the Nexus fell",
+"CLÉ GENESIS reconstituée": "GENESIS KEY reassembled",
+"CLÉ DU CHAOS reconstituée": "CHAOS KEY reassembled",
+"Fragments lâchés par : ": "Fragments dropped by: ",
+"<b>Normal</b> ★ — référence<br><b>Difficile</b> ★★ — PV ×1,45 • gains ×1,9<br><b>Extrême</b> ★★★ — PV ×2,1 • gains ×3,2<br><br>Un secteur terminé reste <b>rejouable</b> : seule ta meilleure étoile compte. En difficulté élevée, le décor change.": "<b>Normal</b> ★ — baseline<br><b>Hard</b> ★★ — HP ×1.6 • rewards ×2.1<br><b>Extreme</b> ★★★ — HP ×2.5 • rewards ×3.8<br><br>A cleared sector stays <b>replayable</b>: only your best star counts. On higher difficulty the scenery changes.",
+"Dégâts": "Damage",
+"Cadence": "Fire rate",
+"BUTIN": "LOOT",
+"⚠ À NE PAS TOUCHER": "⚠ DO NOT TOUCH",
+"Réparation": "Repair",
+"+1 vie immédiate": "+1 life instantly",
+"Le seul objet qui rend une vie. Rare : ne compte pas dessus pour survivre.": "The only pickup that restores a life. Rare — don't count on it to survive.",
+"Bouclier": "Shield",
+"8 secondes d’invulnérabilité": "8 seconds of invulnerability",
+"Traverse tout sans encaisser. Le moment de foncer dans la mêlée ou de passer un barrage.": "Go through anything untouched. Your window to charge in or cross a barrage.",
+"Surcadence": "Overdrive",
+"Cadence ×1.6 pendant 10 s": "Fire rate ×1.6 for 10s",
+"Tir accéléré. Idéal juste avant une phase de boss.": "Faster fire. Best saved for a boss phase.",
+"Munitions perçantes": "Piercing rounds",
+"Dégâts ×1.5 pendant 12 s": "Damage ×1.5 for 12s",
+"Chaque tir frappe plus fort. Se cumule avec la surcadence.": "Every shot hits harder. Stacks with Overdrive.",
+"Charge mitrailleuse": "Minigun charge",
+"+1 charge de mitrailleuse": "+1 minigun charge",
+"S’ajoute à ta barre de bonus. Utilisable quand tu veux, y compris plus tard.": "Added to your bonus bar. Use it whenever you want, even later.",
+"Charge de bombe": "Bomb charge",
+"+1 charge de bombe": "+1 bomb charge",
+"Nettoie l’écran d’un coup. Garde-la pour un moment vraiment saturé.": "Clears the screen instantly. Save it for a truly crowded moment.",
+"Charge fantôme": "Ghost charge",
+"+1 charge d’escorte": "+1 escort charge",
+"Deux alliés te suivent et tirent avec toi pendant 22 secondes.": "Two allies follow you and fire alongside you for 22 seconds.",
+"Noyau de données": "Data Core",
+"+18 points, converti en GC": "+18 points, converted to GC",
+"Le butin le plus rentable : chaque noyau ramassé se transforme en crédits à la fin de la mission.": "The most valuable loot: every core you pick up turns into credits at the end of the mission.",
+"Éclat de données": "Data Shard",
+"+12 points et +3 frags": "+12 points and +3 frags",
+"Butin courant. Sans valeur seul, décisif en quantité.": "Common loot. Worthless alone, decisive in numbers.",
+"Mine posée": "Planted mine",
+"Explose au contact": "Explodes on contact",
+"Cercle rouge cerclé d’une croix, avec des pointes. Ce n’est PAS un objet à ramasser : elle est lâchée par le Poseur et s’éteint d’elle-même au bout de quelques secondes.": "A red circle with a cross and spikes. This is NOT a pickup: it is dropped by the Mine Layer and burns out on its own after a few seconds.",
+"VAGUE": "WAVE",
+"SECTEUR SÉCURISÉ": "SECTOR SECURED",
+"SECTEUR NEUTRALISÉ": "SECTOR NEUTRALISED",
+"POSSÉDÉ": "OWNED",
+"Tir": "Shot",
+"Disponible dès le départ": "Available from the start",
+"Trait vert Solana": "Solana green bolt",
+"Double trait violet": "Twin violet bolts",
+"Comète orange": "Orange comet",
+"Cristal cyan": "Cyan crystal",
+"Lance dorée": "Golden lance",
+"Orbe spectral": "Spectral orb",
+"Salve de trois": "Triple salvo",
+"Chevron rose": "Pink chevron",
+"Anneau violet": "Violet ring",
+"Éclat de givre": "Frost shard",
+"Sceau doré": "Golden seal",
+"Flamme dégradée": "Gradient flame",
+"Salve verte": "Green salvo",
+"Chevron sanglant": "Blood chevron",
+"Le vaisseau de départ. Aucun bonus, aucune faiblesse : c'est l'étalon auquel tous les autres se comparent.": "The starting ship. No bonus, no weakness: the yardstick every other ship is measured against.",
+"Fourni dès le début. Léger gain de dégâts, silhouette large qui se repère bien dans le feu.": "Given from the start. Slight damage gain, wide silhouette that stands out in the chaos.",
+"Premier achat conseillé. Tir à tête ronde et traînée, très lisible quand l'écran se charge.": "The recommended first buy. Round-headed shot with a trail, very readable when the screen fills up.",
+"Projectile en losange allongé. Bon compromis entre prix et dégâts pour aborder la boucle 2.": "Elongated diamond projectile. A good price-to-damage balance for entering loop 2.",
+"Tir épais à cœur clair. Le dernier palier avant les vaisseaux qui se méritent.": "Thick shot with a bright core. The last tier before the ships you must earn.",
+"Débloqué en tapant le logo sept fois. Orbe pulsant avec halo : le tir le plus visible du jeu.": "Unlocked by tapping the logo seven times. Pulsing orb with a halo: the most visible shot in the game.",
+"Série blindée. Trois traits serrés : couverture large, idéale contre les formations.": "Armoured series. Three tight bolts: wide coverage, ideal against formations.",
+"Profil agressif. Tir en pointe, pensé pour percer les groupes en ligne.": "Aggressive profile. Pointed shot, built to punch through lines.",
+"Se mérite après quatre secteurs de Chaos. Anneau qui se dilate, lisible sur fond chargé.": "Earned after four Chaos sectors. An expanding ring, readable on busy backgrounds.",
+"Se mérite avec les deux clés reconstituées. Éclat rotatif à six branches.": "Earned with both keys reassembled. A rotating six-pointed shard.",
+"Le plus cher du hangar. Lance à garde, dégâts très élevés.": "The most expensive in the hangar. Guarded lance, very high damage.",
+"Ne s'achète pas : il faut terrasser NEXUS PRIME. Le vaisseau le plus puissant du jeu.": "Cannot be bought: you must defeat NEXUS PRIME. The most powerful ship in the game.",
+"Récompense de la CLÉ GENESIS. Blindé compact, tir en trois traits verts.": "Reward for the GENESIS KEY. Compact armour, three green bolts.",
+"Récompense de la CLÉ DU CHAOS. Chevron rouge, dégâts élevés pour un vaisseau gratuit.": "Reward for the CHAOS KEY. Red chevron, high damage for a free ship.",
+"Fragments lâchés par": "Fragments dropped by",
+"VORTEX": "VORTEX",
+"SENTINELLE": "SENTINEL",
+"CORRUPTION": "CORRUPTION",
+"NEXUS": "NEXUS",
+"FRACTURE": "FRACTURE",
+"LE GARDIEN": "THE GUARDIAN",
+"L’ESSAIMEUR": "THE SWARMER",
+"LE COLOSSE": "THE COLOSSUS",
+"L’ORACLE": "THE ORACLE",
+"SECRETS — ": "SECRETS — "
+};
+
+function T(fr, ...args){
+  let t = (LANGUE==='en' && EN[fr]) ? EN[fr] : fr;
+  args.forEach((v,i)=>{ t = t.split('{'+i+'}').join(v); });
+  return t;
+}
+
+/* Détection au premier lancement, puis choix du joueur */
+function langueInitiale(){
+  if(S.prefs && S.prefs.langue) return S.prefs.langue;
+  const l=(navigator.language||navigator.userLanguage||'fr').toLowerCase();
+  return l.startsWith('fr') ? 'fr' : 'en';
+}
+
+/* Parcourt les textes statiques de la page et applique la table */
+function traduirePage(){
+  /* Parcours defensif : un contexte sans TreeWalker ne doit pas empecher
+     le jeu de demarrer, il restera simplement en francais. */
+  const aTraiter=[];
+  try{
+    if(typeof NodeFilter==='undefined' || !document.createTreeWalker) return;
+    const marcheur=document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    let noeud;
+    while((noeud=marcheur.nextNode())){
+      const p=noeud.parentNode;
+      if(!p || p.nodeName==='SCRIPT' || p.nodeName==='STYLE') continue;
+      const brut=noeud.nodeValue;
+      if(!brut || !brut.trim()) continue;
+      aTraiter.push(noeud);
+    }
+  }catch(e){ LOG.warn('[SEEKER] traduction de la page impossible : '+(e&&e.message)); return; }
+  aTraiter.forEach(nd=>{
+    /* On garde le texte français d'origine sur le noeud pour pouvoir revenir */
+    if(nd._fr===undefined) nd._fr=nd.nodeValue;
+    const cle=nd._fr.trim();
+    if(LANGUE==='en' && EN[cle]) nd.nodeValue=nd._fr.replace(cle, EN[cle]);
+    else nd.nodeValue=nd._fr;
+  });
+  /* attributs visibles */
+  try{
+  document.querySelectorAll('[aria-label],[placeholder]').forEach(el=>{
+    ['aria-label','placeholder'].forEach(a=>{
+      const v=el.getAttribute(a); if(!v) return;
+      if(!el.dataset['fr'+a]) el.dataset['fr'+a]=v;
+      const o=el.dataset['fr'+a];
+      el.setAttribute(a, (LANGUE==='en' && EN[o]) ? EN[o] : o);
+    });
+  });
+  }catch(e){}
+}
+
+function changerLangue(l){
+  LANGUE = (l==='en') ? 'en' : 'fr';
+  if(!S.prefs) S.prefs={};
+  S.prefs.langue=LANGUE; save();
+  traduirePage();
+  majBoutonsLangue();
+  /* les écrans générés se redessinent avec la nouvelle langue */
+  try{ renderSettings(); }catch(e){}
+  try{ renderBestiaire(); }catch(e){}
+  try{ renderQuests(); }catch(e){}
+  try{ renderShop(); }catch(e){}
+  try{ renderShips(); }catch(e){}
+  try{ renderMap(); majBoutonCampagne(); }catch(e){}
+  try{ poserIcones(); ui(); }catch(e){}
+  toast(LANGUE==='en' ? 'Language: English' : 'Langue : Français', 1800);
+}
+
+/* ============================================================
+   DUREE D'UN SECTEUR
+   Un secteur de combat se termine apres un nombre de vagues donne ;
+   un secteur a boss se termine quand le boss tombe. Sans cela la
+   mission ne pouvait se conclure que par la mort du joueur.
+   Une vague dure environ 15 s : 8 vagues = 2 min, 14 vagues = 3 min 30.
+   ============================================================ */
+const VAGUES_SECTEUR = {
+  1:6, 2:7, 3:8,            /* decouverte : on apprend */
+  5:9, 8:6,                 /* nebuleuse, hub */
+  9:10, 10:11, 11:13,       /* transcendance : ca s'allonge */
+  13:9, 14:6, 15:11,        /* chaos */
+  17:6, 18:12, 19:8
+};
+function vaguesRequises(id){
+  if(BOSS_DEFS[id]) return null;              /* c'est le boss qui conclut */
+  return VAGUES_SECTEUR[id] || 9;
+}
+
+/* Fin de mission reussie : on laisse respirer avant l'ecran de resultat */
+function conclureSecteur(g, raison){
+  if(g.termine) return;
+  g.termine=true;
+  g.raisonFin=raison;
+  const msg = raison==='boss' ? '☠️ SECTEUR NEUTRALISÉ' : '✅ SECTEUR SÉCURISÉ';
+  toast(msg, 3000);
+  Audio2.jouerSfx('levelup'); haptique('victoire');
+  g.shake=Math.max(g.shake,16);
+  /* on stoppe l'arrivee d'ennemis, le joueur savoure sa fin de mission */
+  g.plusDeSpawn=true;
+  setTimeout(()=>{ if(G===g && g.running) endGame(); }, 2400);
+}
+
+/* ============================================================
+   CONTRATS DE SECTEUR
+   Jusqu'ici une mission consistait a survivre a des vagues sans autre
+   but que d'arriver au bout : aucun objectif lisible, aucun palier.
+   Chaque noeud recoit desormais un contrat, affiche avant, suivi
+   pendant, recompense apres. Le rater ne bloque pas la progression.
+   ============================================================ */
+const CONTRATS = {
+  kills:   {nom:'PURGE',      texte:n=>T('Détruire ')+n+T(' unités'),        suivi:(g,n)=>Math.min(g.kills||0,n)+'/'+n,
+            fait:(g,n)=>(g.kills||0)>=n},
+  survie:  {nom:'TENIR',      texte:n=>T('Survivre ')+n+T(' secondes'),       suivi:(g,n)=>Math.min(Math.floor((g.frame||0)/60),n)+'/'+n+'s',
+            fait:(g,n)=>Math.floor((g.frame||0)/60)>=n},
+  score:   {nom:'RENDEMENT',  texte:n=>T('Atteindre ')+n.toLocaleString()+T(' points'), suivi:(g,n)=>Math.round((g.score||0)/n*100)+'%',
+            fait:(g,n)=>(g.score||0)>=n},
+  intact:  {nom:'SANS FAUTE', texte:()=>T('Terminer sans perdre de vie'),  suivi:(g)=>g.viePerdue?T('échoué'):T('intact'),
+            fait:(g)=>!g.viePerdue},
+  sobre:   {nom:'SOBRIÉTÉ',  texte:()=>T('Terminer sans utiliser de bonus'), suivi:(g)=>g.bonusUtilise?T('échoué'):T('aucun'),
+            fait:(g)=>!g.bonusUtilise},
+  combo:   {nom:'ENCHAÎNEMENT',texte:n=>T('Atteindre le combo ×')+n,       suivi:(g,n)=>'×'+(g.comboMax||1).toFixed(1),
+            fait:(g,n)=>(g.comboMax||0)>=n}
+};
+
+/* Un contrat par noeud, choisi pour coller a ce que le secteur raconte.
+   [type, valeur, recompense en GC] */
+/* Un contrat par secteur jouable. Les valeurs sont celles de la
+   difficulte Normal : elles sont recalculees plus bas selon le cran choisi. */
+const CONTRAT_NOEUD = {
+  1:['kills',45,150],    2:['survie',95,190],   3:['intact',0,260],    4:['kills',70,340],
+  5:['survie',130,300],  6:['sobre',0,470],     7:['intact',0,540],    8:['score',9000,280],
+  9:['combo',5,400],     10:['score',26000,440],11:['survie',185,520], 12:['kills',110,780],
+  13:['kills',85,480],   14:['score',12000,360],15:['combo',6,580],    16:['intact',0,840],
+  17:['survie',85,400],  18:['survie',170,620], 19:['kills',60,640],   20:['sobre',0,980],
+  21:['kills',150,1500]
+};
+
+/* La difficulte change le rythme : l'objectif doit suivre, la recompense aussi. */
+const ECHELLE_CONTRAT = {
+  normal:    {cible:1.00, gain:1.0},
+  difficile: {cible:1.35, gain:1.8},
+  extreme:   {cible:1.75, gain:3.0}
+};
+
+/* Accesseurs traduits pour les donnees ecrites en francais */
+function titreNoeud(nd){ return nd ? T(nd.title) : ''; }
+function briefNoeud(nd){ return nd ? T(nd.brief) : ''; }
+
+function contratDuNoeud(id){
+  const c=CONTRAT_NOEUD[id]; if(!c) return null;
+  const def=CONTRATS[c[0]]; if(!def) return null;
+  const e=ECHELLE_CONTRAT[loadout.difficulte] || ECHELLE_CONTRAT.normal;
+  /* les objectifs binaires (sans faute, sobriete) n'ont pas de palier a
+     recalculer : seule leur recompense suit la difficulte */
+  const chiffre = c[1]>0;
+  let valeur = chiffre ? Math.round(c[1]*e.cible) : c[1];
+  if(c[0]==='combo') valeur = Math.min(6, Math.round(c[1]*(1+(e.cible-1)*0.35)));  /* le combo plafonne a 6,5 */
+  return {type:c[0], valeur, gc:Math.round(c[2]*e.gain), def, difficulte:loadout.difficulte};
+}
+function contratRempli(g){
+  const c=g && g.contrat; if(!c) return false;
+  return !!c.def.fait(g, c.valeur);
+}
+/* Ligne de suivi dans le HUD, rafraichie a chaque frame */
+function majContratHud(){
+  const el=document.getElementById('hud-contrat'); if(!el) return;
+  const g=G;
+  if(!g || !g.contrat){ el.style.display='none'; return; }
+  el.style.display='block';
+  const c=g.contrat, ok=contratRempli(g);
+  el.innerHTML='<span style="color:'+(ok?'#14F195':'#9ca3af')+'">'+(ok?'✓ ':'')+
+    c.def.nom+'</span> <b style="color:'+(ok?'#14F195':'#c4b5fd')+'">'+c.def.suivi(g,c.valeur)+'</b>';
+}
+
+/* ============================================================
+   SECRETS — quatre easter eggs, invisibles tant qu'ils ne sont
+   pas trouves. Ils n'apparaissent en clair qu'une fois debloques.
+   ============================================================ */
+const SECRETS=[
+  {id:'silence', nom:'SILENCE RADIO',    gc:300, indice:"Il paraît que certains pilotes coupent tout.",
+   d:"Secteur terminé avec le son ET la musique coupés."},
+  {id:'arcade',  nom:'VÉTÉRAN D’ARCADE', gc:250, indice:"Parfois, il suffit de regarder.",
+   d:"Laissé la démo tourner sur ses quatre mondes sans y toucher."},
+  {id:'zerog',   nom:'DÉRIVE ZÉRO-G',    gc:400, indice:"Un secteur n’apparaît sur aucune carte officielle.",
+   d:"Débris Oubliés sécurisé — le nœud secret de Genesis."},
+  {id:'orbital', nom:'CODE ORBITAL',     gc:500, indice:"Quatre coins. Sens horaire. Depuis le haut-gauche.",
+   d:"Séquence des quatre coins saisie sur l’accueil."},
+  {id:'sidev',   nom:'SI J’ÉTAIS DEV',   gc:750, indice:"Le réseau sur lequel tu joues est écrit quelque part. Insiste.",
+   d:"Mot DEVNET tapé 5 fois dans les réglages."}
+];
+function secretTrouve(id){ return (S.secrets||[]).includes(id); }
+
+/* ---- Easter egg DEVNET : « SI J'ÉTAIS DEV » ----
+   Cinq appuis sur le mot DEVNET des reglages. Ce qu'on donne : un terminal
+   de bord en lecture seule, une livree blueprint et un indicatif ironique.
+   Ce qu'on NE donne PAS : le vrai mode developpeur. Aucun avantage de jeu. */
+let _devnetTaps=0, _devnetT=0;
+function tapDevnet(ev){
+  try{ if(ev && ev.stopPropagation) ev.stopPropagation(); }catch(e){}
+  const now=Date.now();
+  if(now-_devnetT>1600) _devnetTaps=0;
+  _devnetT=now; _devnetTaps++;
+  if(secretTrouve('sidev')){
+    toast('Tu as déjà le badge. Le vrai accès, toujours pas.', 2600); return;
+  }
+  if(_devnetTaps>=5){
+    _devnetTaps=0;
+    S.terminal=true;                 /* telemetrie en lecture seule */
+    S.blueprint=true;                /* livree filaire */
+    debloquerSecret('sidev');
+    setTimeout(()=>toast('🔒 Accès développeur refusé. Mais on t’a fait un badge.', 4200), 900);
+    setTimeout(()=>toast('🖥️ Terminal de bord + livrée Blueprint + indicatif STAGIAIRE', 4600), 2400);
+    try{ renderSettings(); }catch(e){}
+  } else if(_devnetTaps>=3){
+    toast('encore '+(5-_devnetTaps)+'…', 900);
+  }
+}
+/* Le terminal n'affiche que de la technique : image par seconde, charge,
+   nombre d'objets. Rien sur les ennemis, donc aucun avantage tactique. */
+function dessinerTerminal(g){
+  if(!S.terminal || !(S.prefs&&S.prefs.terminal!==false)) return;
+  const ctx=g.ctx;
+  const maintenant=performance.now();
+  g._tImg=g._tImg||[]; g._tImg.push(maintenant);
+  while(g._tImg.length && g._tImg[0]<maintenant-1000) g._tImg.shift();
+  const ips=g._tImg.length;
+  const lignes=[
+    'ips '+String(ips).padStart(3),
+    'obj '+String((g.enemies||[]).length+(g.eBullets||[]).length+(g.bullets||[]).length).padStart(3),
+    'vag '+String(g.wave||0).padStart(3),
+    'nd  '+String(S.currentNode).padStart(3)
+  ];
+  /* Place a gauche, sous le bandeau de mission : en bas il passait derriere
+     les boutons de boost et restait invisible. */
+  const X=8, Y=Math.round(g.h*0.22), L=86, H=66;
+  ctx.save();
+  ctx.font='10px ui-monospace, monospace'; ctx.textAlign='left';
+  ctx.fillStyle='rgba(4,10,8,.72)';
+  ctx.fillRect(X, Y, L, H);
+  ctx.strokeStyle='rgba(20,241,149,.35)'; ctx.lineWidth=1;
+  ctx.strokeRect(X+0.5, Y+0.5, L-1, H-1);
+  ctx.fillStyle='rgba(20,241,149,.55)';
+  ctx.fillText('TERMINAL', X+6, Y+13);
+  ctx.fillStyle='#14F195';
+  lignes.forEach((t,i)=>ctx.fillText(t, X+6, Y+27+i*13));
+  ctx.restore();
+}
+function debloquerSecret(id){
+  if(secretTrouve(id)) return;
+  const sc=SECRETS.find(s=>s.id===id); if(!sc) return;
+  S.secrets=(S.secrets||[]).concat(id);
+  S.skr+=sc.gc;
+  verifierVaisseaux();
+  toast('✨ SECRET • '+sc.nom+' • +'+sc.gc+' GC', 4200);
+  Audio2.jouerSfx('levelup'); haptique('victoire');
+  save(); ui();
+}
+/* Vignettes de l'ecran quetes : masquees tant que non trouvees */
+function renderCles(){
+  const box=document.getElementById('cles-liste'); if(!box) return;
+  box.innerHTML=Object.entries(CLES).map(([id,c])=>{
+    const f=fragments(id), fini=f>=3;
+    const noms=c.boss.map(b=>T((BOSS_DEFS[b]||{}).nom||('N'+b))).join(', ');
+    return '<div style="padding:13px 15px;border-radius:16px;border:1px solid '+
+      (fini?c.couleur+'66':'rgba(255,255,255,.08)')+';background:'+
+      (fini?c.couleur+'12':'rgba(255,255,255,.025)')+'">'+
+      '<div class="flex items-center gap-2">'+
+        (ASSETS[c.slot]
+          ? '<img src="'+ASSETS[c.slot].src+'" style="width:26px;height:26px;object-fit:contain;'+
+            'filter:drop-shadow(0 0 5px '+c.couleur+')'+(fini?'':';opacity:.4;filter:grayscale(1)')+'"/>'
+          : '<span style="font-size:15px">'+(fini?'🔑':'🔩')+'</span>')+
+        '<span class="font-semibold text-[12.5px]" style="color:'+(fini?c.couleur:'#9ca3af')+'">'+T(c.nom)+'</span>'+
+        '<span class="text-[11px] ml-auto font-bold" style="color:'+(fini?c.couleur:'#6b7280')+'">'+
+          Math.min(f,3)+'/3</span>'+
+      '</div>'+
+      '<div class="bar mt-2 mb-2"><div style="width:'+Math.min(100,f/3*100)+'%"></div></div>'+
+      '<div class="text-[10.5px]" style="color:#8b8b9e;line-height:1.55">'+c.desc+'</div>'+
+      '<div class="text-[9.5px] mt-1" style="color:#6b7280">'+T('Fragments lâchés par')+' : '+noms+'</div>'+
+      '</div>';
+  }).join('');
+}
+function renderSecrets(){
+  renderCles();
+  const box=document.getElementById('secrets-liste'); if(!box) return;
+  const nb=(S.secrets||[]).length;
+  const t=document.getElementById('secrets-compteur');
+  if(t) t.textContent=nb+'/'+SECRETS.length;
+  box.innerHTML=SECRETS.map(sc=>{
+    const ok=secretTrouve(sc.id);
+    return '<div style="padding:13px 15px;border-radius:16px;border:1px solid '+
+      (ok?'rgba(251,191,36,.4)':'rgba(255,255,255,.07)')+';background:'+
+      (ok?'rgba(251,191,36,.07)':'rgba(255,255,255,.025)')+'">'+
+      '<div class="flex items-center gap-2">'+
+      '<span style="font-size:15px">'+(ok?'✨':'🔒')+'</span>'+
+      '<span class="font-semibold text-[12.5px]" style="color:'+(ok?'#fcd34d':'#6b7280')+'">'+
+        (ok?T(sc.nom):'? ? ?')+'</span>'+
+      (ok?'<span class="text-[9px] ml-auto" style="color:#fbbf24">+'+sc.gc+' GC</span>':'')+
+      '</div>'+
+      '<div class="text-[10.5px] mt-1.5" style="color:'+(ok?'#9ca3af':'#5b6472')+';line-height:1.55;font-style:'+
+        (ok?'normal':'italic')+'">'+(ok?T(sc.d):T(sc.indice))+'</div>'+
+      '</div>';
+  }).join('');
+}
+
+/* ============================================================
+   MODE DEVELOPPEUR
+   Cinq appuis sur le numero de version dans les Reglages.
+   Sert aux demos : ouvrir tout le contenu sans refaire la campagne.
+   ============================================================ */
+let _devTaps=0, _devT=0;
+function tapVersion(){
+  const now=Date.now();
+  if(now-_devT>1600) _devTaps=0;
+  _devT=now; _devTaps++;
+  if(_devTaps>=5 && !S.dev){
+    S.dev=true; save(); renderSettings();
+    toast('🛠️ MODE DÉVELOPPEUR ACTIVÉ', 3000);
+    Audio2.jouerSfx('levelup');
+  } else if(_devTaps>=3 && !S.dev){
+    toast('encore '+(5-_devTaps)+'…', 900);
+  }
+}
+function devToutDebloquer(){
+  S.unlocked=SHIPS.map(s=>s.id);
+  S.ghostUnlocked=true;
+  S.completedNodes=NODES.map(x=>x.id);
+  S.secrets=SECRETS.map(x=>x.id);
+  S.cles={}; Object.keys(CLES).forEach(k=>{ S.cles[k]=3; });
+  NODES.forEach(x=>{ S.nodeStars[x.id]=3; });
+  S.skr+=50000;
+  save(); ui(); renderSettings();
+  toast('Tout ouvert • 12 vaisseaux, 22 secteurs, 4 secrets, +50 000 GC', 4000);
+}
+function devCredits(){ S.skr+=25000; save(); ui(); toast('+25 000 GC', 1800); }
+function devVider(){
+  S.completedNodes=[0]; S.currentNode=1; S.nodeStars={}; S.secrets=[];
+  S.unlocked=[0,1]; S.ship=0; loadout.ship=0; S.carteActive=1;
+  save(); ui(); renderSettings();
+  toast('Progression remise a zero (le mode dev reste actif)', 3000);
+}
+function devQuitter(){ S.dev=false; _devTaps=0; save(); renderSettings(); toast('Mode développeur désactivé',2000); }
+
+/* CODE ORBITAL : les quatre coins de l'accueil, dans le sens horaire */
+let _coinsSeq=[], _coinsT=0;
+function coinTape(i){
+  const now=Date.now();
+  if(now-_coinsT>2500) _coinsSeq=[];      /* trop lent : la sequence retombe */
+  _coinsT=now;
+  _coinsSeq.push(i);
+  if(_coinsSeq.length>4) _coinsSeq.shift();
+  if(_coinsSeq.join('')==='0123') debloquerSecret('orbital');
+}
+
+/* ============================================================
+   BESTIAIRE — comportement de chaque unite
+   ============================================================ */
+const BESTIAIRE=[
+  {slot:'enemyChasseur', nom:'Chasseur', menace:1, arrivee:'N1',
+   d:"Rapide, il corrige sa trajectoire pour te suivre lat\u00e9ralement. Peu de PV : \u00e9limine-le t\u00f4t ou esquive de c\u00f4t\u00e9."},
+  {slot:'enemyTireur', nom:'Tireur', menace:2, arrivee:'N1',
+   d:"Se poste en haut d'\u00e9cran et lache des rafales de 3. Ne reste jamais dans son axe vertical."},
+  {slot:'enemyKamikaze', nom:'Kamikaze', menace:2, arrivee:'N1',
+   d:"Descend, puis fonce droit sur toi et explose au contact. Casse sa course avant qu'il ne s'amorce."},
+  {slot:'enemyTank', nom:'Tank', menace:3, arrivee:'N1',
+   d:"Lent, tr\u00e8s r\u00e9sistant, large. Il ne te vise pas : il occupe l'espace et te pousse \u00e0 la faute."},
+  {slot:'enemyDiviseur', nom:'Diviseur', menace:3, arrivee:'N3',
+   d:"\u00c0 sa mort, il se scinde en deux fragments plus rapides. Ne le tue pas dans un moment charg\u00e9."},
+  {slot:'enemyBouclier', nom:'Porteur de bouclier', menace:4, arrivee:'N5',
+   d:"Un arc d'\u00e9nergie prot\u00e8ge la face qu'il te pr\u00e9sente : tes tirs y sont renvoy\u00e9s. Contourne-le."},
+  {slot:'enemyTeleport', nom:'T\u00e9l\u00e9porteur', menace:4, arrivee:'N7',
+   d:"Dispara\u00eet puis r\u00e9appara\u00eet au-dessus ou en dessous de toi. Impossible de camper une position."},
+  {slot:'enemyPoseur', nom:'Poseur de mines', menace:4, arrivee:'N9',
+   d:"S\u00e8me des mines fixes qui persistent. Il r\u00e9duit ton terrain \u00e0 chaque passage."},
+  {slot:'enemyDroneAv', nom:'Drone harceleur', menace:4, arrivee:'N9', variante:true,
+   d:"Il ne fonce jamais. Il se poste sur un flanc \u00e0 ta hauteur, tire en diagonale, et change de c\u00f4t\u00e9 d\u00e8s que tu t'approches. Il faut aller le chercher, sinon il te grignote."},
+  {slot:'enemySniperElite', nom:'Sniper \u00e9lite', menace:4, arrivee:'N10', variante:true,
+   d:"Tireur d'\u00e9lite : lance d'\u00e9nergie fine, cadence accrue."},
+  {slot:'enemyTankCorr', nom:'Tank corrompu', menace:4, arrivee:'N10', variante:true,
+   d:"Tank contamin\u00e9 : PV largement sup\u00e9rieurs."},
+  {slot:'enemyMineA', nom:'Mine chercheuse', menace:4, arrivee:'N11', variante:true,
+   d:"Elle s'amorce t\u00f4t puis fonce droit sur toi. Abats-la avant qu'elle ne charge."},
+  {slot:'enemyMineB', nom:'Mine d\u00e9rivante', menace:3, arrivee:'N9', variante:true,
+   d:"Sem\u00e9e par le Poseur. Elle descend lentement, acc\u00e9l\u00e8re, puis s'\u00e9teint. Elle r\u00e9duit ton terrain."},
+  {slot:'enemyZeroG', nom:'Chasseur z\u00e9ro-G', menace:5, arrivee:'N11', variante:true,
+   d:"Trajectoire irr\u00e9guli\u00e8re, tr\u00e8s difficile \u00e0 anticiper."},
+  {slot:'enemyDroneHeavy', nom:'Drone lourd', menace:5, arrivee:'N12', variante:true,
+   d:"La forme la plus blind\u00e9e du r\u00e9seau. Pr\u00e9vois tes charges de bonus."},
+  {slot:'bossVortexCore', nom:'\u2622 VORTEX', menace:5, arrivee:'N4', boss:true,
+   d:"BOSS \u2014 PV \u00d75. Spirale continue de disques tranchants, rotation permanente. Reste en mouvement circulaire."},
+  {slot:'bossSentinelle', nom:'\u2622 SENTINELLE / CORRUPTION', menace:5, arrivee:'N6 \u2022 N7', boss:true,
+   d:"BOSS \u2014 PV \u00d78 \u00e0 \u00d710. Croix rotative de missiles et invocations. Au n\u0153ud 7, il inverse tes commandes."},
+  {slot:'nexusIdle', nom:'\u2622 NEXUS', menace:5, arrivee:'N12', boss:true,
+   d:"BOSS FINAL \u2014 PV \u00d716, 3 phases. Alterne spirale, croix et \u00e9ventail. Change d'apparence \u00e0 chaque phase."}
+,
+
+  /* ---------- CHAOS PROTOCOL : le reseau a mute ---------- */
+  {slot:'cxRapide', nom:'Intercepteur Chaos', menace:4, arrivee:'C13', chaos:true,
+   d:"Le chasseur, en pire. Mêmes trois tactiques, mais 2× plus de PV et une vitesse de piqué supérieure."},
+  {slot:'cxSniper', nom:'Tireur Chaos', menace:4, arrivee:'C13', chaos:true,
+   d:"Se poste plus haut et tient sa position plus longtemps. Ses rafales arrivent quand tu ne l'attends plus."},
+  {slot:'cxGuepe', nom:'Guêpe', menace:4, arrivee:'C13', chaos:true,
+   d:"Kamikaze léger mais nerveux. Il s'amorce tôt et corrige sa course pendant tout le vol."},
+  {slot:'cxTank', nom:'Colosse Chaos', menace:5, arrivee:'C15', chaos:true,
+   d:"PV ×2,4. Il ne te vise pas, il te prive d'espace. Passe derrière lui plutôt que de le percer."},
+  {slot:'cxDrone', nom:'Essaimeur', menace:4, arrivee:'C15', chaos:true,
+   d:"À sa mort il libère deux fragments rapides. Choisis le moment où tu l'abats."},
+  {slot:'cxLourd', nom:'Garde Blindé', menace:5, arrivee:'C15', chaos:true,
+   d:"Bouclier frontal qui renvoie tes tirs. La seule ouverture est sur ses flancs."},
+  {slot:'cxElite', nom:'Spectre Chaos', menace:5, arrivee:'C18', chaos:true,
+   d:"Téléporteur d'élite. Il réapparaît systématiquement dans ton angle mort."},
+  {slot:'cxBoss', nom:'Semeur', menace:5, arrivee:'C18', chaos:true,
+   d:"Tapisse le terrain de mines persistantes. Chaque passage réduit ta zone de jeu."},
+
+  {slot:'primeIdle', nom:'☢ FRACTURE', menace:5, arrivee:'C16', boss:true, chaos:true,
+   d:"BOSS — PV ×17, 3 formes. Croix rotative resserrée. Première anomalie stable du Chaos Protocol."},
+  {slot:'cxDrone', nom:'☢ L’ESSAIMEUR', menace:4, arrivee:'N5', boss:true,
+   d:"BOSS — PV ×6, 2 phases. Éventail de projectiles et invocations continues. Le premier vrai mur de Genesis."},
+  {slot:'cxMassif2', nom:'☢ LE COLOSSE', menace:5, arrivee:'N11', boss:true,
+   d:"BOSS — PV ×12, 2 phases. Croix rotative, aucune invocation : c’est un duel de placement pur."},
+  {slot:'vortexCrystal', nom:'☢ L’ORACLE', menace:5, arrivee:'C18', boss:true, chaos:true,
+   d:"BOSS — PV ×18, 2 phases. Spirale rapide et invocations. Il lit tes déplacements avant toi."},
+  {slot:'bossDragon', nom:'☢ LE GARDIEN', menace:5, arrivee:'C20', boss:true, chaos:true,
+   d:"BOSS — PV ×19, 2 phases, invocations. Il garde le portail et inverse tes commandes. Le dernier verrou avant NEXUS PRIME."},
+  {slot:'cxMassif1', nom:'☢ NEXUS PRIME', menace:5, arrivee:'C21', boss:true, chaos:true,
+   d:"BOSS ULTIME — PV ×26, 5 formes successives. Chaque mue change son pattern et son apparence. Le Nexus n'en était qu'une copie."}
+];
+/* Filtre courant du bestiaire : tous / genesis / chaos / boss */
+let _bestFiltre='tous';
+function filtrerBestiaire(f){ _bestFiltre=f; renderBestiaire(); }
+/* Fiche de chaque vaisseau : silhouette, tir, et ce qu'il vaut vraiment */
+const FICHES_VAISSEAU = {
+  0:  {tir:'Trait vert Solana',   d:"Le vaisseau de départ. Aucun bonus, aucune faiblesse : c'est l'étalon auquel tous les autres se comparent."},
+  1:  {tir:'Double trait violet', d:"Fourni dès le début. Léger gain de dégâts, silhouette large qui se repère bien dans le feu."},
+  2:  {tir:'Comète orange',       d:"Premier achat conseillé. Tir à tête ronde et traînée, très lisible quand l'écran se charge."},
+  3:  {tir:'Cristal cyan',        d:"Projectile en losange allongé. Bon compromis entre prix et dégâts pour aborder la boucle 2."},
+  4:  {tir:'Lance dorée',         d:"Tir épais à cœur clair. Le dernier palier avant les vaisseaux qui se méritent."},
+  5:  {tir:'Orbe spectral',       d:"Orbe pulsant avec halo : le tir le plus visible du jeu. Ne s'achète pas, ne se gagne dans aucun secteur. Certains pilotes jurent l'avoir trouvé sans quitter l'accueil."},
+  6:  {tir:'Salve de trois',      d:"Série blindée. Trois traits serrés : couverture large, idéale contre les formations."},
+  7:  {tir:'Chevron rose',        d:"Profil agressif. Tir en pointe, pensé pour percer les groupes en ligne."},
+  8:  {tir:'Anneau violet',       d:"Se mérite après quatre secteurs de Chaos. Anneau qui se dilate, lisible sur fond chargé."},
+  9:  {tir:'Éclat de givre',      d:"Se mérite avec les deux clés reconstituées. Éclat rotatif à six branches."},
+  10: {tir:'Sceau doré',          d:"Le plus cher du hangar. Lance à garde, dégâts très élevés."},
+  11: {tir:'Flamme dégradée',     d:"Ne s'achète pas : il faut terrasser NEXUS PRIME. Le vaisseau le plus puissant du jeu."},
+  12: {tir:'Salve verte',         d:"Récompense de la CLÉ GENESIS. Blindé compact, tir en trois traits verts."},
+  13: {tir:'Chevron sanglant',    d:"Récompense de la CLÉ DU CHAOS. Chevron rouge, dégâts élevés pour un vaisseau gratuit."},
+};
+
+function renderHangar(){
+  const box=document.getElementById('bestiaire-liste'); if(!box) return;
+  box.innerHTML=SHIPS.map(sh=>{
+    const f=FICHES_VAISSEAU[sh.id]||{};
+    const img=ASSETS['ship'+sh.id];
+    const possede=S.unlocked.includes(sh.id);
+    const acces = sh.cond ? T(sh.condTxt) : (sh.sol>0 ? sh.sol+' SOL' : T('Disponible dès le départ'));
+    const teinte = sh.cond ? 'rgba(20,241,149,.35)' : (sh.sol>0 ? 'rgba(251,191,36,.3)' : 'rgba(153,69,255,.25)');
+    return '<div class="glass rounded-2xl flex gap-3 items-start" style="border-color:'+teinte+';padding:14px 15px">'+
+      '<div style="width:54px;height:54px;flex:none;display:flex;align-items:center;justify-content:center">'+
+      (img?'<img src="'+img.src+'" style="width:100%;height:100%;object-fit:contain'+(possede?'':';opacity:.35;filter:grayscale(.8)')+'"/>'
+          :'<div style="width:26px;height:26px;border-radius:6px;background:rgba(153,69,255,.3)"></div>')+
+      '</div><div style="min-width:0;flex:1">'+
+      '<div class="flex items-center gap-2 flex-wrap">'+
+        '<span class="font-semibold text-[13px]">'+sh.name+'</span>'+
+        '<span class="text-[9px] px-1.5 py-0.5 rounded" style="background:rgba(153,69,255,.18);color:#c4b5fd">'+
+          T('dégâts')+' ×'+sh.bonus.toFixed(2)+'</span>'+
+        (possede?'<span class="text-[9px] px-1.5 py-0.5 rounded" style="background:rgba(20,241,149,.16);color:#14F195">'+T('POSSÉDÉ')+'</span>'
+                :'<span class="text-[9px]" style="color:#6b7280">🔒</span>')+
+      '</div>'+
+      '<div class="text-[10px] mt-1" style="color:#8b8b9e">'+T('Tir')+' : '+T(f.tir||'—')+' &bull; '+acces+'</div>'+
+      '<div class="text-[11px] text-gray-400" style="line-height:1.6;margin-top:4px">'+T(f.d||'')+'</div>'+
+      '</div></div>';
+  }).join('');
+}
+
+/* Ce que le joueur ramasse en combat, et ce que ca fait */
+const OBJETS = [
+  {cle:'vie',      titre:'Réparation',        effet:'+1 vie immédiate',
+   d:"Le seul objet qui rend une vie. Rare : ne compte pas dessus pour survivre."},
+  {cle:'bouclier', titre:'Bouclier',          effet:'8 secondes d’invulnérabilité',
+   d:"Traverse tout sans encaisser. Le moment de foncer dans la mêlée ou de passer un barrage."},
+  {cle:'rapide',   titre:'Surcadence',        effet:'Cadence ×1.6 pendant 10 s',
+   d:"Tir accéléré. Idéal juste avant une phase de boss."},
+  {cle:'perce',    titre:'Munitions perçantes', effet:'Dégâts ×1.5 pendant 12 s',
+   d:"Chaque tir frappe plus fort. Se cumule avec la surcadence."},
+  {cle:'mitra',    titre:'Charge mitrailleuse', effet:'+1 charge de mitrailleuse',
+   d:"S’ajoute à ta barre de bonus. Utilisable quand tu veux, y compris plus tard."},
+  {cle:'nuke',     titre:'Charge de bombe',   effet:'+1 charge de bombe',
+   d:"Nettoie l’écran d’un coup. Garde-la pour un moment vraiment saturé."},
+  {cle:'ghost',    titre:'Charge fantôme',    effet:'+1 charge d’escorte',
+   d:"Deux alliés te suivent et tirent avec toi pendant 22 secondes."},
+  {cle:'noyau',    titre:'Noyau de données',  effet:'+18 points, converti en GC',
+   d:"Le butin le plus rentable : chaque noyau ramassé se transforme en crédits à la fin de la mission."},
+  {cle:'eclat',    titre:'Éclat de données',  effet:'+12 points et +3 frags',
+   d:"Butin courant. Sans valeur seul, décisif en quantité."},
+];
+const PIEGES = [
+  {couleur:'#dc2626', titre:'Mine posée', effet:'Explose au contact',
+   d:"Cercle rouge cerclé d’une croix, avec des pointes. Ce n’est PAS un objet à ramasser : elle est lâchée par le Poseur et s’éteint d’elle-même au bout de quelques secondes."},
+];
+
+function renderObjets(){
+  const box=document.getElementById('bestiaire-liste'); if(!box) return;
+  box.innerHTML =
+    OBJETS.map(o=>{
+      const d=DROPS[o.cle]||{};
+      const img=ASSETS[d.slot];
+      return '<div class="glass rounded-2xl flex gap-3 items-start" style="border-color:'+
+        ((d.couleur||'#9945FF')+'55')+';padding:14px 15px">'+
+        '<div style="width:46px;height:46px;flex:none;display:flex;align-items:center;justify-content:center">'+
+        (img?'<img src="'+img.src+'" style="width:100%;height:100%;object-fit:contain"/>'
+            :'<div style="width:22px;height:22px;border-radius:50%;background:'+(d.couleur||'#9945FF')+'"></div>')+
+        '</div><div style="min-width:0">'+
+        '<div class="flex items-center gap-2 flex-wrap">'+
+          '<span class="font-semibold text-[13px]">'+T(o.titre)+'</span>'+
+          '<span class="text-[9px] px-1.5 py-0.5 rounded" style="background:'+(d.couleur||'#9945FF')+'22;color:'+(d.couleur||'#c4b5fd')+'">'+T(o.effet)+'</span>'+
+        '</div>'+
+        '<div class="text-[11px] text-gray-400" style="line-height:1.6;margin-top:4px">'+T(o.d)+'</div>'+
+        '</div></div>';
+    }).join('') +
+    '<div class="sect" style="margin-top:22px"><span>&#9888; &Agrave; NE PAS TOUCHER</span><i class="lig"></i></div>' +
+    PIEGES.map(p=>
+      '<div class="glass rounded-2xl flex gap-3 items-start" style="border-color:rgba(220,38,38,.45);padding:14px 15px">'+
+      '<div style="width:46px;height:46px;flex:none;display:flex;align-items:center;justify-content:center">'+
+        '<div style="width:26px;height:26px;border-radius:50%;border:2.5px solid #dc2626;background:#3f0d12"></div></div>'+
+      '<div style="min-width:0">'+
+      '<div class="flex items-center gap-2 flex-wrap">'+
+        '<span class="font-semibold text-[13px]" style="color:#f87171">'+T(p.titre)+'</span>'+
+        '<span class="text-[9px] px-1.5 py-0.5 rounded" style="background:rgba(220,38,38,.18);color:#f87171">'+T(p.effet)+'</span>'+
+      '</div>'+
+      '<div class="text-[11px] text-gray-400" style="line-height:1.6;margin-top:4px">'+T(p.d)+'</div>'+
+      '</div></div>').join('');
+}
+
+function renderBestiaire(){
+  const box=document.getElementById('bestiaire-liste'); if(!box) return;
+  const bf=document.getElementById('best-filtres');
+  if(bf){
+    bf.innerHTML=[['tous','TOUS'],['genesis','GENESIS'],['chaos','CHAOS'],['boss','BOSS'],['butin','BUTIN'],['hangar','HANGAR']].map(([id,lab])=>{
+      const on=(_bestFiltre===id);
+      return '<button onclick="filtrerBestiaire(\''+id+'\')" style="flex:1;padding:7px 4px;border-radius:11px;'+
+        'font-size:9.5px;font-weight:800;letter-spacing:1px;border:1px solid '+
+        (on?'rgba(153,69,255,.7)':'rgba(255,255,255,.09)')+';background:'+
+        (on?'rgba(153,69,255,.22)':'rgba(255,255,255,.03)')+';color:'+(on?'#c4b5fd':'#8b8b9e')+'">'+lab+'</button>';
+    }).join('');
+  }
+  if(_bestFiltre==='butin'){ renderObjets(); return; }
+  if(_bestFiltre==='hangar'){ renderHangar(); return; }
+  const liste=BESTIAIRE.filter(e=>
+      _bestFiltre==='tous'   ? true :
+      _bestFiltre==='boss'   ? !!e.boss :
+      _bestFiltre==='chaos'  ? !!e.chaos : !e.chaos);
+  box.innerHTML=liste.map(e=>{
+    const img=ASSETS[e.slot];
+    const etoiles='\u25c6'.repeat(e.menace)+'<span style="opacity:.25">'+'\u25c6'.repeat(5-e.menace)+'</span>';
+    const teinte=e.boss?'rgba(232,121,249,.45)':e.chaos?'rgba(20,241,149,.35)':e.variante?'rgba(251,191,36,.35)':'rgba(153,69,255,.25)';
+    return '<div class="glass rounded-2xl flex gap-3 items-start" style="border-color:'+teinte+';padding:14px 15px">'+
+      '<div style="width:52px;height:52px;flex:none;display:flex;align-items:center;justify-content:center">'+
+      (img?'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">'+
+           '<img src="'+img.src+'" style="width:112%;height:112%;object-fit:contain;'+
+           'transform:rotate('+((ORIENT[e.slot]||0))+'deg);filter:drop-shadow(0 0 3px rgba(255,255,255,.35))"/></div>'
+          :'<div style="width:26px;height:26px;border-radius:6px;background:rgba(153,69,255,.3)"></div>')+
+      '</div><div style="min-width:0">'+
+      '<div class="flex items-center gap-2 flex-wrap"><span class="font-semibold text-[13px]">'+T(e.nom)+'</span>'+
+      '<span class="text-[9px] text-gray-500">'+e.arrivee+'</span>'+
+      (e.variante?'<span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">VARIANTE</span>':'')+
+      (e.chaos?'<span class="text-[8px] px-1.5 py-0.5 rounded" style="background:rgba(20,241,149,.16);color:#5eead4">CHAOS</span>':'')+
+      (e.boss?'<span class="text-[8px] px-1.5 py-0.5 rounded" style="background:rgba(232,121,249,.18);color:#f0abfc">BOSS</span>':'')+'</div>'+
+      '<div class="text-[10px] text-red-300 my-0.5">'+etoiles+'</div>'+
+      '<div class="text-[11px] text-gray-400" style="line-height:1.6;margin-top:3px">'+T(e.d)+'</div>'+
+      '</div></div>';
+  }).join('');
+}
+
+/* ============================================================
+   PALIERS ON-CHAIN — chaque seuil de transactions reelles debloque
+   quelque chose. Regle absolue : jamais de puissance. Une transaction
+   coute presque rien a repeter ; si les paliers donnaient des degats
+   ou des vies, le jeu deviendrait du pay-to-win. On ne distribue donc
+   que du cosmetique, de l'information et du prestige.
+   ============================================================ */
+const PALIERS_TX = [
+  {id:'tx5',   seuil:5,   cle:'journal',    n:'PREMIER CONTACT',
+   d:'5 TX on-chain \u2022 ouvre le journal des signatures', gc:250,
+   recompense:'Journal on-chain \u2014 tes transactions, avec lien vers Solscan'},
+  {id:'tx15',  seuil:15,  cle:'eligible',   n:'SEEKER TASK',
+   d:'15 TX on-chain \u2022 activit\u00e9 Solana', gc:600, sp:true,
+   recompense:'Badge \u00c9LIGIBLE'},
+  {id:'tx30',  seuil:30,  cle:'livree',     n:'PILOTE CONFIRM\u00c9',
+   d:'30 TX on-chain', gc:900,
+   recompense:'Livr\u00e9e chrom\u00e9e \u2014 teinte alternative sur ton vaisseau'},
+  {id:'tx45',  seuil:45,  cle:'munition',   n:'ARMURIER',
+   d:'45 TX on-chain', gc:1200,
+   recompense:'Munition signature \u2014 un tir au visuel exclusif'},
+  {id:'tx60',  seuil:60,  cle:'indicatif',  n:'V\u00c9T\u00c9RAN DU R\u00c9SEAU',
+   d:'60 TX on-chain', gc:1500,
+   recompense:'Indicatif de pilote \u2014 un titre affich\u00e9 en fin de partie'},
+  {id:'tx75',  seuil:75,  cle:'transmission', n:'ARCHIVISTE',
+   d:'75 TX on-chain', gc:1800,
+   recompense:'Transmission classifi\u00e9e \u2014 un chapitre de lore et la piste CHAOS en menu'},
+  {id:'tx90',  seuil:90,  cle:'hud',        n:'OP\u00c9RATEUR GENESIS',
+   d:'90 TX on-chain', gc:2200,
+   recompense:'Th\u00e8me HUD Genesis \u2014 interface or et violet'},
+  {id:'tx100', seuil:100, cle:'validateur', n:'VALIDATEUR',
+   d:'100 TX on-chain \u2022 le rang ultime', gc:3500,
+   recompense:'Rang VALIDATEUR \u2014 badge permanent et livr\u00e9e dor\u00e9e'},
+  {id:'tx120', seuil:120, cle:'trainee',    n:'PROPULSION LIBRE',
+   d:'120 TX on-chain', gc:4200,
+   recompense:'Tra\u00een\u00e9e de r\u00e9acteur \u2014 couleur de propulsion au choix'},
+  {id:'tx150', seuil:150, cle:'architecte', n:'ARCHITECTE',
+   d:'150 TX on-chain \u2022 le rang de prestige', gc:6000,
+   recompense:'Rang ARCHITECTE \u2014 titre exclusif et carte aux couleurs Genesis'}
+];
+/* Couleurs de propulsion, palier 120. Purement decoratives. */
+const TRAINEES = [
+  {id:'violet', nom:'Violet',   c:'#9945FF'},
+  {id:'vert',   nom:'\u00c9meraude', c:'#14F195'},
+  {id:'or',     nom:'Or',       c:'#fbbf24'},
+  {id:'cyan',   nom:'Cyan',     c:'#67e8f9'},
+  {id:'rouge',  nom:'Braise',   c:'#fb7185'}
+];
+/* Transmission debloquee au palier 75. */
+const TRANSMISSION_ARCHIVE = {
+  titre:'ARCHIVE // PROTOCOLE GENESIS',
+  texte:"Le Nexus n'a jamais \u00e9t\u00e9 con\u00e7u pour garder quoi que ce soit. "+
+        "Il a \u00e9t\u00e9 con\u00e7u pour <b>signer</b>. Chaque secteur que tu s\u00e9curises "+
+        "\u00e9crit une ligne dans un registre que personne ne peut r\u00e9\u00e9crire \u2014 "+
+        "pas m\u00eame ceux qui l'ont b\u00e2ti.<br><br>"+
+        "C'est pour \u00e7a qu'ils ont coup\u00e9 la Boucle. Pas pour t'arr\u00eater : "+
+        "pour effacer la preuve. Ils ont oubli\u00e9 qu'un registre distribu\u00e9 "+
+        "n'a pas de centre \u00e0 d\u00e9truire.<br><br>"+
+        "<i>\u2014 fragment r\u00e9cup\u00e9r\u00e9 sur l'\u00e9pave du vaisseau-archive SEEKER-00</i>"
+};
+/* ---- Palier 5 : journal des signatures ----
+   Les signatures etaient deja memorisees mais jamais montrees. */
+/* Echappe tout ce qui vient de l'exterieur avant de l'inserer dans le DOM.
+   Les signatures et libelles d'action transitent par le wallet et le RPC :
+   on ne leur fait pas confiance. */
+function txtSur(v){
+  return String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+/* Une signature Solana est du base58 sur 64 a 96 caracteres. Tout le reste
+   est refuse : pas de lien construit avec une valeur douteuse. */
+const RE_SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{64,96}$/;
+
+function renderJournalTx(){
+  const box=document.getElementById('panneau-journal'); if(!box) return;
+  /* Tout texte visible passe par T() : ces panneaux sont regeneres a chaque
+     changement de langue, le parcours du DOM ne les atteint pas. */
+  if(!debloque('journal')){
+    box.innerHTML='<div class="sect"><span>\ud83d\udd12 '+T('JOURNAL ON-CHAIN')+'</span><i class="lig"></i></div>'+
+      '<div class="text-[10.5px]" style="color:#6b7280;line-height:1.6;padding:4px 2px">'+
+      T('Se débloque à 5 transactions on-chain ({0}/5).', txCumulees())+'</div>';
+    return;
+  }
+  const sigs=(S.signatures||[]);
+  box.innerHTML='<div class="sect"><span>\u26d3\ufe0f '+T('JOURNAL ON-CHAIN')+'</span><i class="lig"></i></div>'+
+    '<div class="text-[10px] mb-2" style="color:#8b8b9e">'+
+      T('{0} transactions confirmées • {1} dernières conservées', txCumulees(), sigs.length)+'</div>'+
+    (sigs.length? sigs.map(x=>{
+      const sig=String(x.sig||'');
+      const valide=RE_SIGNATURE.test(sig);
+      const court=txtSur(sig.slice(0,8)+'\u2026'+sig.slice(-6));
+      const quand=txtSur(new Date(x.t).toLocaleString());
+      const action=txtSur(x.action);
+      const dedans=
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'+
+          '<span style="font-size:10.5px;color:#14F195;font-weight:600">'+action+'</span>'+
+          '<span style="font-size:9px;color:#6b7280">'+quand+'</span></div>'+
+        '<div style="font-size:9.5px;color:#9ca3af;font-family:monospace;margin-top:3px">'+
+          court+(valide?' \u2197':' \u26a0')+'</div>';
+      const style='class="glass" style="display:block;border-radius:12px;padding:9px 11px;margin-bottom:6px;text-decoration:none"';
+      /* Signature au format inattendu : on affiche, on ne lie pas. */
+      return valide
+        ? '<a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'?cluster=devnet" target="_blank" rel="noopener" '+style+'>'+dedans+'</a>'
+        : '<div '+style+'>'+dedans+'</div>';
+    }).join('') : '<div class="text-[10.5px]" style="color:#6b7280">'+T('Aucune signature enregistrée.')+'</div>');
+}
+
+/* ---- Paliers 30 et 100 : livrees ----
+   Un simple filtre de rendu : aucune incidence sur l'equilibre. */
+function filtreLivree(){
+  /* La livree blueprint prime : c'est une trouvaille, pas un palier. */
+  if(S.blueprint && S.livreeBlueprint!==false)
+    return 'grayscale(1) brightness(1.5) contrast(2.4) sepia(1) hue-rotate(160deg) saturate(4)';
+  if(debloque('validateur')) return 'hue-rotate(35deg) saturate(1.5) brightness(1.12)';  /* doree */
+  if(debloque('livree'))     return 'saturate(0.25) brightness(1.3) contrast(1.1)';      /* chromee */
+  return null;
+}
+
+/* ---- Palier 60 : indicatif de pilote ---- */
+function choisirTrainee(id){
+  if(!debloque('trainee')) return toast('Tra\u00een\u00e9e verrouill\u00e9e', 2000);
+  if(!TRAINEES.some(t=>t.id===id)) return;
+  S.trainee=id; save(); renderSettings();
+  Audio2.jouerSfx('button_click'); toast('Propulsion modifi\u00e9e', 1800);
+}
+function choisirIndicatif(v){
+  if(!debloque('indicatif')) return toast('Indicatif verrouill\u00e9', 2000);
+  if(!indicatifsDisponibles().includes(v)) return toast('Indicatif verrouill\u00e9', 2000);
+  S.indicatif=v; save(); renderSettings(); ui();
+  Audio2.jouerSfx('button_click');
+  toast('Indicatif \u00ab '+v+' \u00bb adopt\u00e9', 2200);
+}
+function renderPanneauPaliers(){
+  const box=document.getElementById('panneau-paliers'); if(!box) return;
+  const n=txCumulees();
+  box.innerHTML='<div class="sect"><span>\ud83c\udfc5 '+T('PALIERS ON-CHAIN')+'</span><i class="lig"></i></div>'+
+    '<div class="text-[10.5px] mb-2" style="color:#8b8b9e;line-height:1.55">'+
+      T('Chaque palier ne donne que du cosmétique ou du prestige : aucune récompense ne rend le vaisseau plus fort.')+'</div>'+
+    PALIERS_TX.map(p=>{
+      const ok=debloque(p.cle);
+      return '<div style="display:flex;gap:9px;align-items:flex-start;padding:7px 2px;'+
+        'border-bottom:1px solid rgba(255,255,255,.05)">'+
+        '<span style="font-size:13px;flex:none">'+(ok?'\u2705':'\ud83d\udd12')+'</span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:11px;font-weight:700;color:'+(ok?'#14F195':'#9ca3af')+'">'+
+            p.seuil+' TX \u2022 '+T(p.n)+'</div>'+
+          '<div style="font-size:9.5px;color:#7c7a8c;line-height:1.5">'+T(p.recompense)+'</div>'+
+        '</div></div>';
+    }).join('')+
+    (debloque('indicatif')
+      ? '<div class="text-[10px] mt-3 mb-1" style="color:#8b8b9e">'+T('Ton indicatif')+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+        indicatifsDisponibles().map(v=>'<button onclick="choisirIndicatif(\''+v+'\')" class="glass" '+
+          'style="padding:6px 10px;border-radius:10px;font-size:10px;font-weight:700;'+
+          (S.indicatif===v?'border-color:rgba(20,241,149,.65);color:#14F195':'color:#9ca3af')+'">'+T(v)+'</button>').join('')+
+        '</div>'
+      : '')+
+    (debloque('trainee')
+      ? '<div class="text-[10px] mt-3 mb-1" style="color:#8b8b9e">'+T('Traînée de réacteur')+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+        TRAINEES.map(t=>'<button onclick="choisirTrainee(\''+t.id+'\')" class="glass" '+
+          'style="padding:6px 10px;border-radius:10px;font-size:10px;font-weight:700;color:'+t.c+';'+
+          (S.trainee===t.id?'border-color:'+t.c:'')+'">'+T(t.nom)+'</button>').join('')+
+        '</div>'
+      : '')+
+    (S.blueprint
+      ? '<div class="text-[10px] mt-3 mb-1" style="color:#8b8b9e">'+T('Livrée Blueprint')+'</div>'+
+        '<button onclick="basculerBlueprint()" class="glass" style="padding:7px 12px;border-radius:10px;'+
+          'font-size:10px;font-weight:700;'+
+          (S.livreeBlueprint!==false ? 'border-color:rgba(103,232,249,.6);color:#67e8f9' : 'color:#9ca3af')+'">'+
+          (S.livreeBlueprint!==false ? T('Activée') : T('Désactivée'))+'</button>'
+      : '')+
+    (debloque('transmission')
+      ? '<div class="glass" style="margin-top:12px;border-radius:14px;padding:12px;'+
+          'border-color:rgba(153,69,255,.4)">'+
+          '<div style="font-family:Orbitron,sans-serif;font-size:10px;letter-spacing:1.5px;'+
+            'color:#c4b5fd;margin-bottom:7px">'+T(TRANSMISSION_ARCHIVE.titre)+'</div>'+
+          '<div style="font-size:10.5px;color:#9ca3af;line-height:1.7">'+T(TRANSMISSION_ARCHIVE.texte)+'</div>'+
+        '</div>'
+      : '')+
+    '<div class="text-[10px] mt-3" style="color:#6b7280">'+T('Progression : {0} TX', n)+'</div>';
+}
+
+/* ---- Terminal de bord de la carte (easter egg DEVNET) ----
+   Regle de conception : il ne montre QUE ce que le joueur peut deja savoir.
+   Sur un secteur jamais joue, les lignes tactiques restent muettes, sinon
+   ce serait un outil de reperage, donc un avantage de jeu. */
+/* La livree Blueprint delave volontairement le vaisseau. Certains la
+   trouveront jolie, d'autres voudront revoir leurs couleurs : elle doit
+   pouvoir se retirer. */
+function basculerBlueprint(){
+  if(!S.blueprint) return;
+  S.livreeBlueprint = (S.livreeBlueprint===false);
+  save(); renderSettings();
+  Audio2.jouerSfx('button_click');
+  toast(S.livreeBlueprint!==false ? T('Livrée Blueprint activée') : T('Couleurs d\u2019origine rétablies'), 2200);
+}
+
+function basculerTerminalCarte(){
+  const el=document.getElementById('terminal-carte'); if(!el) return;
+  el.classList.toggle('ouvert');
+  S.termOuvert=el.classList.contains('ouvert');
+  const ong=document.getElementById('term-onglet');
+  if(ong) ong.setAttribute('aria-expanded', S.termOuvert?'true':'false');
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+  if(S.termOuvert) majTerminalCarte();
+  save();
+}
+/* Deux temps, uniquement quand le terminal est deploye : le premier appui
+   affiche le dossier du secteur, le second lance la preparation. Sans le
+   terminal ouvert, un seul appui suffit — on ne rallonge pas le parcours
+   des joueurs qui n'ont pas trouve l'easter egg. */
+let _noeudArme=null, _noeudArmeT=0;
+function terminalDeploye(){
+  const el=document.getElementById('terminal-carte');
+  return !!(el && !el.classList.contains('hidden') && el.classList.contains('ouvert'));
+}
+function toucherNoeud(id){
+  if(!terminalDeploye()){ S.currentNode=id; majTerminalCarte(); return openPrep(id); }
+  const now=Date.now();
+  if(_noeudArme===id && (now-_noeudArmeT)<9000){
+    _noeudArme=null; majTerminalCarte(); return openPrep(id);
+  }
+  _noeudArme=id; _noeudArmeT=now;
+  S.currentNode=id;
+  majTerminalCarte();
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+}
+
+function ligneTerm(cle, val, inconnu){
+  return '<div class="li"><b>'+cle+'</b><span'+(inconnu?' class="inc"':'')+'>'+val+'</span></div>';
+}
+function majTerminalCarte(){
+  const el=document.getElementById('terminal-carte'); if(!el) return;
+  el.classList.toggle('hidden', !secretTrouve('sidev'));
+  if(!secretTrouve('sidev')) return;
+  el.classList.toggle('ouvert', !!S.termOuvert);
+  const corps=document.getElementById('term-int'); if(!corps) return;
+
+  const id=S.currentNode;
+  const nd=NODES.find(x=>x.id===id);
+  const joue = (S.completedNodes||[]).includes(id);
+  const inc = T('non recueilli');
+  let h='<div class="tl">// SEEKER TERMINAL v1</div>';
+
+  /* Bloc chaine : purement informatif */
+  h+= ligneTerm('cluster', 'devnet')
+    + ligneTerm('rpc', String(CHAINE.rpc||'').replace(/^https?:\/\//,'').split('/')[0])
+    + ligneTerm('tx', txCumulees())
+    + ligneTerm(T('wallet'), S.walletReel ? txtSur(S.address||'ok') : T('non connecté'));
+
+  h+= '<div class="nd">// '+T('SECTEUR')+' '+String(id).padStart(2,'0')+'</div>';
+  if(!nd){ corps.innerHTML=h+ligneTerm(T('statut'), inc, true); return; }
+
+  const b=BOUCLES[nd.boucle];
+  h+= ligneTerm(T('nom'), T(nd.title))
+    + ligneTerm(T('type'), nd.type||'combat')
+    + ligneTerm(T('boucle'), b?T(b.nom):'—')
+    + ligneTerm(T('statut'), joue ? T('sécurisé') : (noeudAccessible(nd) ? T('accessible') : T('verrouillé')));
+
+  /* Etoiles obtenues : c'est un fait acquis, pas une information tactique. */
+  const et=(S.nodeStars||{})[id]||0;
+  h+= ligneTerm(T('étoiles'), et ? '★'.repeat(et) : '—');
+
+  /* Les donnees tactiques n'apparaissent qu'une fois le secteur joue. */
+  if(joue){
+    const v=vaguesRequises(id);
+    h+= ligneTerm(T('vagues'), v===null ? T('boss') : v);
+    const bd=BOSS_DEFS[id];
+    h+= ligneTerm('boss', bd ? T(bd.nom) : T('aucun'));
+    const c=contratDuNoeud(id);
+    h+= ligneTerm(T('contrat'), c && c.def ? T(c.def.nom) : '—');
+    if(nd.meca) h+= ligneTerm(T('mécanique'), nd.meca);
+  } else {
+    h+= ligneTerm(T('vagues'),   inc, true)
+      + ligneTerm('boss',        inc, true)
+      + ligneTerm(T('contrat'),  inc, true);
+    h+= '<div class="nd inc" style="letter-spacing:0;margin-top:9px;line-height:1.6;color:#5f5a72">'+
+        T('Données tactiques indisponibles : secteur jamais parcouru.')+'</div>';
+  }
+  /* Rappel du second appui : sans ca on ne comprend pas pourquoi la
+     preparation ne s'ouvre plus au premier contact. */
+  if(_noeudArme===id) h+= '<div class="act">\u25b6 '+T('Appuie une seconde fois sur le nœud pour lancer la mission.')+'</div>';
+  corps.innerHTML=h;
+}
+
+/* Indicatifs proposes au palier 60. Purement decoratifs. */
+const INDICATIFS = ['SPECTRE','NOMADE','SENTINELLE','ORACLE','VECTEUR','FANTOME'];
+/* Reserve au palier 150 : il ne figure pas dans la liste commune. */
+const INDICATIF_PRESTIGE = 'ARCHITECTE';
+function indicatifsDisponibles(){
+  let l = debloque('architecte') ? INDICATIFS.concat(INDICATIF_PRESTIGE) : INDICATIFS.slice();
+  if(secretTrouve('sidev')) l = l.concat('STAGIAIRE');   /* le badge ironique */
+  return l;
+}
+
+/* Nombre de transactions REELLES cumulees. Sans wallet connecte, rien ne
+   s'incremente : on ne decroche aucun rang sans signer. */
+function txCumulees(){ return S.txTotal||0; }
+/* Enregistre des transactions reellement confirmees on-chain. */
+function creditTX(nb){
+  if(!S.walletReel || !nb) return;
+  S.txTotal=(S.txTotal||0)+nb;
+  verifierPaliersTX();
+}
+/* Un deblocage est acquis definitivement, il ne se reprend jamais. */
+function debloque(cle){ return (S.debloquesTx||[]).includes(cle); }
+function verifierPaliersTX(){
+  const n=txCumulees();
+  PALIERS_TX.forEach(p=>{
+    if(n>=p.seuil && !debloque(p.cle)){
+      S.debloquesTx=(S.debloquesTx||[]).concat(p.cle);
+      toast('\ud83d\udd13 '+p.n+' \u2022 '+p.recompense, 4600);
+      Audio2.jouerSfx('levelup'); haptique('victoire');
+      if(p.cle==='indicatif' && !S.indicatif) S.indicatif=INDICATIFS[0];
+      if(p.cle==='trainee' && !S.trainee) S.trainee='violet';
+    }
+  });
+  save();
+}
+
+/* ============================================================
+   QUETES — progression, palier, et recompense a reclamer
+   ============================================================ */
+function listeQuetes(){
+  const nbEtoiles=Object.values(S.nodeStars||{}).reduce((t,v)=>t+v,0);
+  const nbExtreme=Object.values(S.nodeStars||{}).filter(v=>v>=3).length;
+  /* Recompenses exclusivement en GC : le jeu ne distribue jamais de SOL. */
+  return [
+    {id:'streak',   n:'Daily Streak',      d:'3 jours de suite',            c:S.streak, m:3,  skr:150},
+    {id:'streak7',  n:'Semaine compl\u00e8te',  d:'7 jours de suite',            c:S.streak, m:7,  skr:400},
+    {id:'kills100', n:'Destroyer',         d:'100 ennemis d\u00e9truits',       c:S.totalKills, m:100, skr:220},
+    {id:'kills500', n:'Exterminateur',     d:'500 ennemis d\u00e9truits',       c:S.totalKills, m:500, skr:700},
+    /* Les six paliers on-chain, generes depuis PALIERS_TX */
+    ...PALIERS_TX.map(p=>({ id:p.id, n:p.n, d:p.d, c:txCumulees(), m:p.seuil,
+                            skr:p.gc, sp:!!p.sp, palier:p })),
+    {id:'camp5',    n:'Campagne',          d:'5 secteurs s\u00e9curis\u00e9s',      c:(S.completedNodes||[]).length, m:5,  skr:250},
+    {id:'camp12',   n:'Genesis Complete',  d:'12 secteurs s\u00e9curis\u00e9s',     c:(S.completedNodes||[]).length, m:12, skr:1200},
+    {id:'boss3',    n:'Chasseur de boss',  d:'Vortex, Corruption, Nexus',   c:[4,7,12].filter(x=>(S.completedNodes||[]).includes(x)).length, m:3, skr:900},
+    {id:'boss7',    n:'Tueur de titans',   d:'Les 10 boss du jeu terrass\u00e9s',
+     c:[4,5,6,7,11,12,16,18,20,21].filter(x=>(S.completedNodes||[]).includes(x)).length, m:10, skr:2600},
+    {id:'etoiles',  n:'Perfectionniste',   d:'20 \u00e9toiles cumul\u00e9es',       c:nbEtoiles, m:20, skr:500},
+    {id:'extreme',  n:'Sans piti\u00e9',       d:'3 n\u0153uds en Extr\u00eame',        c:nbExtreme, m:3,  skr:650},
+    {id:'infini10', n:'Survivant',         d:'Vague 10 en Infini',          c:S.infiniVague||0, m:10, skr:350},
+    {id:'arena',    n:'Gladiateur',        d:'3 d\u00e9fis Arena remport\u00e9s',   c:Object.keys(S.arenaRecords||{}).length, m:3, skr:450},
+    /* Tant que le secret n'est pas trouve, on donne un indice, pas la solution. */
+    {id:'ghost',    n:'Ghost',
+     d: S.ghostUnlocked ? 'Logo de l\u2019accueil tap\u00e9 7\u00d7' : 'Le protocole fant\u00f4me dort quelque part sur l\u2019accueil\u2026',
+     c:S.ghostUnlocked?1:0, m:1, skr:400},
+    {id:'chaos4',   n:'Protocole Chaos',   d:'4 secteurs de CHAOS s\u00e9curis\u00e9s',
+     c:(S.completedNodes||[]).filter(x=>x>=13).length, m:4, skr:800},
+    {id:'prime',    n:'Origine',           d:'Terrasser NEXUS PRIME',
+     c:(S.completedNodes||[]).includes(21)?1:0, m:1, skr:1500},
+    {id:'combo',    n:'Encha\u00eenement parfait', d:'Atteindre le combo maximum \u00d76',
+     c:Math.floor(S.comboMax||0), m:6, skr:400},
+    {id:'purete',   n:'Puret\u00e9',           d:'2 boss vaincus sans aucun bonus',
+     c:S.sansBonus||0, m:2, skr:750},
+    {id:'intact',   n:'Sans une \u00e9gratignure', d:'5 secteurs sans perdre de vie',
+     c:S.sansDegat||0, m:5, skr:600},
+    {id:'secrets',  n:'Archiviste',        d:'D\u00e9couvrir les 4 secrets',
+     c:(S.secrets||[]).length, m:4, skr:1000},
+    {id:'cles',     n:'Serrurier',         d:'Reconstituer les 2 cl\u00e9s',
+     c:Object.keys(CLES).filter(k=>cleComplete(k)).length, m:2, skr:1600},
+    {id:'contrats', n:'Sous contrat',      d:'8 contrats de secteur remplis',
+     c:(S.contratsRemplis||[]).length, m:8, skr:1100}
+  ].map(q=>({...q, sol:0}));
+}
+function reclamerQuete(id){
+  const q=listeQuetes().find(x=>x.id===id); if(!q) return;
+  if(q.c<q.m) return toast('Objectif non atteint');
+  /* Un palier on-chain exige un wallet connecte : rien ne se reclame sans. */
+  if(q.palier && !S.walletReel) return toast(T('Connecte ton wallet : ce palier se gagne on-chain'), 3400);
+  if(q.palier) verifierPaliersTX();
+  if((S.quetesReclamees||[]).includes(id)) return toast('D\u00e9j\u00e0 r\u00e9clam\u00e9');
+  S.quetesReclamees=(S.quetesReclamees||[]).concat(id);
+  S.skr+=q.skr;   /* les quetes ne versent que des credits */
+  if(q.sp) toast('\ud83c\udf89 \u00c9LIGIBLE \u00c9LIGIBILIT\u00c9 AIRDROP \u2022 +'+q.skr+' GC',3800);
+  else if(q.palier) toast('\ud83d\udd13 '+q.n+' \u2022 '+q.palier.recompense+' \u2022 +'+q.skr+' GC', 4400);
+  else toast('\u2705 '+q.n+' \u2022 +'+(q.sol?q.sol+' SOL ':'')+'+'+q.skr+' GC',3000);
+  Audio2.jouerSfx('levelup'); haptique('victoire');
+  save(); ui(); renderQuests();
+}
+function renderQuests(){
+  const box=document.getElementById('quest-list'); if(!box) return;
+  const qs=listeQuetes();
+  const faites=(S.quetesReclamees||[]);
+  /* les quetes pretes a reclamer remontent en tete */
+  qs.sort((a,b)=>{
+    const pa=faites.includes(a.id)?2:(a.c>=a.m?0:1), pb=faites.includes(b.id)?2:(b.c>=b.m?0:1);
+    return pa-pb;
+  });
+  const pretes=qs.filter(q=>q.c>=q.m && !faites.includes(q.id)).length;
+  const badge=document.getElementById('badge-quetes');
+  if(badge) badge.style.display = pretes>0 ? 'block' : 'none';
+
+  renderSecrets();
+  box.innerHTML=qs.map(q=>{
+    const fini=faites.includes(q.id), pret=q.c>=q.m && !fini;
+    const pct=Math.min(100, q.c/q.m*100);
+    return '<div style="padding:15px 16px" class="glass rounded-2xl '+(q.sp?'border border-green-500/40':'')+
+      (pret?' ring-2 ring-green-400':'')+(fini?' opacity-50':'')+'">'+
+      '<div class="flex justify-between items-start gap-2 mb-1">'+
+        '<div style="min-width:0"><div class="font-semibold text-sm">'+T(q.n)+'</div>'+
+        '<div class="text-[10px] text-gray-500">'+T(q.d)+'</div></div>'+
+        '<span class="text-[10px] flex-none">'+Math.min(q.c,q.m)+'/'+q.m+'</span>'+
+      '</div>'+
+      '<div class="bar mb-2"><div style="width:'+pct+'%"></div></div>'+
+      '<div class="flex justify-between items-center gap-2">'+
+        '<span class="text-[10px] text-gray-400">'+(q.sol?('+'+q.sol+' SOL  '):'')+'+'+q.skr+' GC</span>'+
+        (fini ? '<span class="text-[10px] text-green-400 font-bold">\u2713 R\u00c9CLAM\u00c9</span>'
+              : pret ? '<button onclick="reclamerQuete(\''+q.id+'\')" class="btn px-3 py-1.5 rounded-lg text-[11px] font-bold">R\u00c9CLAMER</button>'
+                     : '<span class="text-[10px] text-gray-600">En cours</span>')+
+      '</div></div>';
+  }).join('');
+}
+/* finishRace : ancienne Arena, remplacee par les defis quotidiens */
+/* Classement local : les vrais records du joueur */
+function enregistrerRecord(nom, score, detail){
+  if(!S.records) S.records=[];
+  S.records.push({nom, score:Math.round(score), detail, date:Date.now()});
+  S.records.sort((a,b)=>b.score-a.score);
+  S.records=S.records.slice(0,12);
+  save();
+}
+
+function renderLB(){
+  const box=document.getElementById('lb'); if(!box) return;
+  const r=(S.records||[]);
+  if(!r.length){
+    box.innerHTML='<div class="text-[11px] text-gray-500 text-center py-3">'+
+      'Aucun record. Termine une mission ou lance le mode Infini pour ouvrir le classement.</div>';
+    return;
+  }
+  box.innerHTML=r.map((e,i)=>{
+    const medaille=i===0?'\ud83e\udd47':i===1?'\ud83e\udd48':i===2?'\ud83e\udd49':'<span style="opacity:.4">#'+(i+1)+'</span>';
+    const d=new Date(e.date);
+    return '<div class="flex justify-between items-center gap-2">'+
+      '<span style="width:26px">'+medaille+'</span>'+
+      '<span class="flex-1 truncate">'+e.nom+'<span class="text-gray-600 text-[10px]"> \u2022 '+e.detail+'</span></span>'+
+      '<span class="text-green-300 font-bold">'+e.score.toLocaleString()+'</span>'+
+      '<span class="text-gray-600 text-[9px]" style="width:38px;text-align:right">'+
+      d.getDate()+'/'+(d.getMonth()+1)+'</span></div>';
+  }).join('');
+}
+
+function ui(){
+  /* Theme HUD Genesis (90 TX) et rang VALIDATEUR (100 TX) : deux classes
+     posees sur la racine, tout le reste est du CSS. */
+  try{
+    const r=document.documentElement;
+    if(r && r.classList){
+      r.classList.toggle('hud-genesis', debloque('hud'));
+      r.classList.toggle('rang-validateur', debloque('validateur'));
+      r.classList.toggle('rang-architecte', debloque('architecte'));
+    }
+  }catch(e){}
+  const bv=document.getElementById('badge-validateur');
+  if(bv) bv.classList.toggle('hidden', !debloque('validateur'));
+  document.getElementById('b-sol').textContent=S.sol.toFixed(2);
+  const bt=document.getElementById('b-skrtok');
+  if(bt) bt.textContent=(S.soldeSkr||0).toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById('b-skr').textContent=Math.floor(S.skr).toLocaleString();
+  document.getElementById('streak').textContent=S.streak;
+  majSeekerTask();
+  majBadgeWallet(); majRecordInfini(); renderQuests();
+  const today=new Date().toDateString();
+  const btn=document.getElementById('btn-daily');
+  if(S.lastClaim===today){btn.disabled=true;btn.textContent='CLAIMED';btn.classList.add('opacity-40');}
+  else{btn.disabled=false;btn.textContent='CLAIM';btn.classList.remove('opacity-40');}
+}
+
+document.getElementById('logo').addEventListener('click',()=>{
+  S.logoTaps++;
+  if(S.logoTaps===7 && !S.ghostUnlocked){ S.ghostUnlocked=true; if(!S.unlocked.includes(5)) S.unlocked.push(5); toast('👻 GHOST PROTOCOL DÉVERROUILLÉ'); sfx('power'); save(); }
+  if(S.logoTaps>12) S.logoTaps=0;
+});
+
+load();
+document.addEventListener('gesturestart',e=>e.preventDefault());
+</script>
+</body>
+</html>

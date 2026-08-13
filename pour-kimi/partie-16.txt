@@ -1,0 +1,3654 @@
+x-langue'); if(el) el.classList.remove('on');
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+  apresChoixLangue();
+}
+/* Suite normale du demarrage : tutoriel a la premiere visite, sinon accueil. */
+function apresChoixLangue(){
+  if(!localStorage.getItem('ss_tuto_vu')) ouvrirTuto(); else show('home');
+}
+
+/* Vrai des le premier geste du joueur. Avant cela, le navigateur refuse
+   tout demarrage audio : inutile d'essayer. */
+let _gesteFait=false;
+['pointerdown','touchstart','keydown','mousedown'].forEach(ev=>
+  document.addEventListener(ev, ()=>{
+    if(_gesteFait) return;
+    _gesteFait=true;
+    /* On rejoue la piste qui attendait. */
+    try{ if(Audio2.pisteEnAttente){ const p=Audio2.pisteEnAttente; Audio2.pisteEnAttente=null; Audio2.jouerMusique(p); } }catch(e){}
+  }, {passive:true}));
+
+let _splashParti=false, _minuteurDemo=null;
+function quitterSplash(){
+  if(_splashParti) return; _splashParti=true;
+  clearTimeout(_minuteurDemo);
+  const el=document.getElementById('splash');
+  if(el){ el.classList.add('parti'); setTimeout(()=>{ el.style.display='none'; },520); }
+  Audio2.jouerMusique('menu');
+  haptique('bouton');
+  /* Premiere chose apres l'accueil : la langue. Ensuite seulement le tuto. */
+  if(!langueDejaChoisie()) ouvrirChoixLangue();
+  else apresChoixLangue();
+}
+/* Sans interaction pendant 15 s : demo auto-jouee (captures du trailer) */
+function armerDemo(){
+  clearTimeout(_minuteurDemo);
+  _minuteurDemo=setTimeout(()=>{ if(!_splashParti && !_demoActive) lancerDemo(); }, 15000);
+}
+
+/* ============================================================
+   TUTO PREMIERE VISITE — 3 etapes
+   ============================================================ */
+const TUTO=[
+  {p:'\ud83d\udd79\ufe0f', t:'SE D\u00c9PLACER', d:"Glisse ton doigt n'importe o\u00f9 sur l'\u00e9cran : le vaisseau suit dans les 8 directions, y compris en diagonale.\n\nAu clavier : ZQSD, WASD ou les fl\u00e8ches."},
+  {p:'\ud83d\udca5', t:'TIRER', d:"Le tir part tout seul, en continu. Tu n'as aucun bouton \u00e0 presser.\n\nTout se joue au placement : coupe les lignes de tir, contourne les boucliers, ne reste jamais immobile."},
+  {p:'\ud83d\udee1\ufe0f', t:'CONNA\u00ceTRE L\u2019ENNEMI', d:"Chaque unit\u00e9 a un comportement fixe : le kamikaze fonce, le t\u00e9l\u00e9porteur appara\u00eet derri\u00e8re toi, le porteur de bouclier renvoie les tirs de face.\n\nLe Bestiaire les d\u00e9crit tous."},
+  {p:'\u2b50', t:'DIFFICULT\u00c9 ET \u00c9TOILES', d:"Chaque n\u0153ud se joue en Normal, Difficile ou Extr\u00eame. Plus dur = jusqu'\u00e0 3,2\u00d7 de r\u00e9compenses.\n\nUn n\u0153ud termin\u00e9 reste rejouable : seule ta meilleure \u00e9toile compte."},
+  {p:'\ud83c\udfaf', t:'OBJECTIF', d:"13 secteurs, 3 boucles, 4 boss. Bats le Vortex pour ouvrir la boucle 2, la Corruption pour la boucle 3, puis affronte le Nexus.\n\n15 transactions te rendent \u00e9ligible \u00e0 l'airdrop SKR."}
+];
+let _tutoIdx=0;
+function ouvrirTuto(){ _tutoIdx=0; document.getElementById('tuto').classList.add('on'); majTuto(); }
+function majTuto(){
+  const e=TUTO[_tutoIdx];
+  document.getElementById('tuto-pict').textContent=e.p;
+  document.getElementById('tuto-titre').textContent=T(e.t);
+  document.getElementById('tuto-texte').textContent=T(e.d);
+  document.getElementById('tuto-btn').textContent=(_tutoIdx===TUTO.length-1)?T('COMMENCER'):T('SUIVANT');
+  document.getElementById('tuto-pts').innerHTML=TUTO.map((_,i)=>'<i class="'+(i===_tutoIdx?'on':'')+'"></i>').join('');
+}
+function tutoSuivant(){
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+  if(_tutoIdx<TUTO.length-1){ _tutoIdx++; majTuto(); } else fermerTuto();
+}
+function fermerTuto(){
+  localStorage.setItem('ss_tuto_vu','1');
+  document.getElementById('tuto').classList.remove('on');
+  /* Intro narrative au tout premier lancement */
+  if(!S.loreVu){
+    S.loreVu=true; save();
+    afficherTransmission(T('ARCHIVES GENESIS'), T(LORE_INTRO.join('\n')), ()=>show('home'), '#c4b5fd');
+  } else show('home');
+}
+
+/* ============================================================
+   POUSSIERE D'ETOILES — accueil
+   ============================================================ */
+function creerPoussiere(){
+  const box=document.getElementById('poussiere'); if(!box||box.dataset.pret) return;
+  box.dataset.pret='1';
+  const nb=(S.prefs&&S.prefs.particules==='faible')?10:(S.prefs&&S.prefs.particules==='eleve')?32:20;
+  let html='';
+  for(let i=0;i<nb;i++){
+    const t=1+Math.random()*2.4, d=14+Math.random()*22, r=Math.random()*-30;
+    html+='<span style="left:'+(Math.random()*100).toFixed(1)+'%;width:'+t.toFixed(1)+'px;height:'+t.toFixed(1)+
+          'px;animation-duration:'+d.toFixed(1)+'s;animation-delay:'+r.toFixed(1)+'s;opacity:'+(0.25+Math.random()*0.45).toFixed(2)+
+          ';background:'+(i%3?'#c4b5fd':'#14F195')+'"></span>';
+  }
+  box.innerHTML=html;
+}
+
+/* ============================================================
+   MODE INFINI — vagues procedurales, sans fin
+   Score = vague x 1000 + vies restantes x 100 + points de jeu
+   ============================================================ */
+/* ============================================================
+   WINGMAN IA — allie autonome, mode Arena Coop
+   ============================================================ */
+const WINGMAN = { hp:60, offsetX:88, suivi:0.055, cadence:400, esquive:64, respawn:5000, degats:0.7 };
+
+function creerWingman(g){
+  g.wing={ x:g.player.x+WINGMAN.offsetX, y:g.player.y+30, r:18,
+           hp:WINGMAN.hp, hpMax:WINGMAN.hp, tir:0, kills:0,
+           mort:0, apparition:40, cote:1 };
+}
+function majWingman(g){
+  const w=g.wing; if(!w) return;
+  if(w.mort>0){
+    w.mort--;
+    if(w.mort===0){
+      w.x=g.player.x-WINGMAN.offsetX; w.y=g.player.y+40;
+      w.hp=w.hpMax; w.apparition=45;
+      parts(w.x,w.y,'#67e8f9',20); Audio2.jouerSfx('levelup');
+      toast('\ud83e\udd16 Wingman op\u00e9rationnel',1400);
+    }
+    return;
+  }
+  if(w.apparition>0) w.apparition--;
+  const cibleX=g.player.x+WINGMAN.offsetX*w.cote, cibleY=g.player.y+34;
+  w.x+=(cibleX-w.x)*WINGMAN.suivi*3;
+  w.y+=(cibleY-w.y)*WINGMAN.suivi*3;
+  for(const p of g.eBullets){
+    if(Math.hypot(p.x-w.x,p.y-w.y)<WINGMAN.esquive){ w.cote=-w.cote; break; }
+  }
+  w.x=Math.max(24,Math.min(g.w-24,w.x));
+  w.y=Math.max(60,Math.min(g.h-30,w.y));
+  w.tir-=16.7;
+  if(w.tir<=0 && w.apparition<=0){
+    let best=null, bd=1e9;
+    for(const e of g.enemies){ const d=Math.hypot(e.x-w.x,e.y-w.y); if(d<bd){bd=d;best=e;} }
+    if(g.boss && !g.boss.entree){ const d=Math.hypot(g.boss.x-w.x,g.boss.y-w.y); if(d<bd){bd=d;best=g.boss;} }
+    if(best){
+      const a=Math.atan2(best.y-w.y,best.x-w.x);
+      g.bullets.push({x:w.x, y:w.y, vx:Math.cos(a)*12, vy:Math.sin(a)*12,
+                      dmg:(1.15+S.weapon*0.38)*WINGMAN.degats, wing:true});
+      w.tir=WINGMAN.cadence;
+    }
+  }
+  for(let i=g.eBullets.length-1;i>=0;i--){
+    const p=g.eBullets[i];
+    if(Math.hypot(p.x-w.x,p.y-w.y)<w.r+p.r){
+      g.eBullets.splice(i,1); w.hp-=8; parts(w.x,w.y,'#67e8f9',4);
+      if(w.hp<=0){ w.mort=Math.round(WINGMAN.respawn/16.7); spawnExplosion(w.x,w.y,22);
+                   Audio2.jouerSfx('enemy_die'); toast('\u26a0 Wingman hors combat',1600); }
+      break;
+    }
+  }
+}
+function dessinerWingman(g){
+  const w=g.wing; if(!w || w.mort>0) return;
+  const ctx=g.ctx, img=ASSETS['ship'+loadout.ship]||ASSETS.ship1||ASSETS.ship0;
+  ctx.save();
+  if(w.apparition>0) ctx.globalAlpha=0.3+0.7*(1-w.apparition/45);
+  if(img) ctx.drawImage(img,w.x-30,w.y-30,60,60);
+  else { ctx.translate(w.x,w.y); formeFallback(ctx,'triangle',w.r,'#67e8f9'); }
+  ctx.restore();
+  const l=34;
+  ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(w.x-l/2,w.y-w.r-13,l,3);
+  ctx.fillStyle='#67e8f9'; ctx.fillRect(w.x-l/2,w.y-w.r-13,l*Math.max(0,w.hp/w.hpMax),3);
+}
+
+/* ============================================================
+   ARENA — defi quotidien : survie chronometree, seed du jour
+   ============================================================ */
+const DEFIS=[
+  {id:'survie',   nom:'SURVIE',        d:"Tiens 60 secondes. Les renforts ne s'arr\u00eatent jamais.", duree:60, mod:{spawn:0.7}},
+  {id:'sansfaute',nom:'SANS FAUTE',    d:"60 secondes, une seule vie. Chaque impact est fatal.",   duree:60, mod:{lives:1}},
+  {id:'nuee',     nom:'NU\u00c9E',         d:"45 secondes face \u00e0 un flux continu de chasseurs.",     duree:45, mod:{spawn:0.45}},
+  {id:'colosses', nom:'COLOSSES',      d:"75 secondes. Peu d'ennemis, mais tr\u00e8s r\u00e9sistants.",     duree:75, mod:{spawn:1.6, hp:2.4}},
+  {id:'chasse',   nom:'PRIME',         d:"60 secondes pour accumuler un maximum de primes.",      duree:60, mod:{spawn:0.9, primes:true}}
+];
+/* Meme defi pour tout le monde un jour donne */
+function defiDuJour(){
+  const j=new Date(); const seed=j.getFullYear()*10000+(j.getMonth()+1)*100+j.getDate();
+  return DEFIS[seed % DEFIS.length];
+}
+function renderArena(){
+  const d=defiDuJour();
+  const nom=document.getElementById('ar-nom'); if(nom) nom.textContent=d.nom;
+  const desc=document.getElementById('arena-desc'); if(desc) desc.textContent=d.d;
+  const du=document.getElementById('ar-duree'); if(du) du.textContent=d.duree+'s';
+  const rec=(S.arenaRecords||{})[d.id]||0;
+  const r=document.getElementById('ar-record'); if(r) r.textContent=rec?rec.toLocaleString():'\u2014';
+  const g=document.getElementById('ar-gain'); if(g) g.textContent='\u00d71.5';
+  renderLB();
+}
+function lancerCoop(){
+  if(!S.connected) return toast('Connecte ton wallet');
+  S.currentNode=-3;
+  const base=MODES.find(m=>m.id==='pilote');
+  const diff=DIFFICULTES[loadout.difficulte]||DIFFICULTES.normal;
+  const mode={...base, hp:base.hp*diff.hp*1.15, spawn:base.spawn*0.8,
+              reward:base.reward*diff.reward, cadence:diff.cadence, diffId:diff.id,
+              flux:diff.flux, vitesse:diff.vitesse, bonusUnites:diff.bonusUnites};
+  const mun=MUNITIONS.find(m=>m.id===loadout.munition)||MUNITIONS[0];
+  show('solo');
+  document.getElementById('hud-title').textContent='ARENA COOP';
+  document.getElementById('hud-mode').textContent='avec Wingman';
+  chargerFondNiveau(3).then(appliquerFondNiveau);
+  initGame(mode, mun);
+  if(!G) return;
+  creerWingman(G); G.coop=true; G.contrat=null;   /* pas de contrat hors campagne */
+  toast('\ud83e\udd16 Wingman d\u00e9ploy\u00e9 \u2014 qui fera le plus de kills ?',3000);
+}
+
+function lancerArena(){
+  if(!S.connected) return toast('Connecte ton wallet');
+  const d=defiDuJour();
+  S.currentNode=-2;
+  const base=MODES.find(m=>m.id==='pilote');
+  const mode={...base,
+    lives:d.mod.lives||base.lives,
+    spawn:base.spawn*(d.mod.spawn||1),
+    hp:base.hp*(d.mod.hp||1),
+    reward:base.reward, cadence:1, diffId:'arena'};
+  const mun=MUNITIONS.find(m=>m.id===loadout.munition)||MUNITIONS[0];
+  show('solo');
+  document.getElementById('hud-title').textContent='ARENA \u2022 '+d.nom;
+  document.getElementById('hud-mode').textContent=d.duree+'s';
+  chargerFondNiveau(6).then(appliquerFondNiveau);
+  initGame(mode, mun);
+  if(!G) return;
+  G.arena=d; G.chrono=d.duree*60; G.contrat=null;
+  toast('\u2694\ufe0f '+d.nom+' \u2014 '+d.duree+' secondes',2600);
+}
+
+function lancerInfini(){
+  if(!S.connected) return toast('Connecte ton wallet');
+  S.currentNode=-1;                                  /* hors campagne */
+  loadout.difficulte=loadout.difficulte||'normal';
+  const base=MODES.find(m=>m.id==='pilote');
+  const diff=DIFFICULTES[loadout.difficulte]||DIFFICULTES.normal;
+  const mode={...base, hp:base.hp*diff.hp, reward:base.reward*diff.reward, cadence:diff.cadence, diffId:diff.id,
+              flux:diff.flux, vitesse:diff.vitesse, bonusUnites:diff.bonusUnites};
+  const mun=MUNITIONS.find(m=>m.id===loadout.munition)||MUNITIONS[0];
+  show('solo');
+  document.getElementById('hud-title').textContent='MODE INFINI';
+  document.getElementById('hud-mode').textContent='Vague 1';
+  chargerFondNiveau(2).then(appliquerFondNiveau);
+  initGame(mode, mun);
+  if(!G) return;
+  G.infini=true; G.spawnMult=1; G.contrat=null;
+  toast('\u267e\ufe0f MODE INFINI \u2014 survis le plus longtemps possible',3000);
+}
+
+/* Progression d'une vague en mode infini */
+/* Secteurs traverses en boucle par le mode infini : le decor change toutes
+   les quatre vagues, puis bascule sur CHAOS quand la pression monte. */
+const INFINI_DECORS = [2,3,5,6,8,10,11,12];
+const INFINI_DECORS_CHAOS = [14,15,17,19];
+
+function vagueInfinie(g){
+  g.wave++;
+  g.spawnMult*=0.99;   /* legere pression supplementaire, la courbe fait le reste */
+  toast('\u26a1 VAGUE '+g.wave);
+  Audio2.jouerSfx('wave_start');
+
+  /* Changement de decor toutes les 4 vagues : sans ca on regarde le meme
+     fond pendant une demi-heure. */
+  if(g.wave%4===0){
+    const chaos = g.wave>=13;
+    const liste = chaos ? INFINI_DECORS_CHAOS : INFINI_DECORS;
+    const nd = liste[Math.floor(g.wave/4)%liste.length];
+    chargerFondNiveau(nd).then(appliquerFondNiveau);
+    if(chaos && !g.themeChaos){
+      g.themeChaos=true;
+      Audio2.jouerMusique('combatChaos');
+      toast('\u26a0\ufe0f '+T('SIGNATURE CHAOS DÉTECTÉE'), 3200);
+    }
+  }
+  /* Mini-boss toutes les 5 vagues, boss complet toutes les 15 */
+  if(g.wave%18===0){
+    g.bossSpawned=false; g.bossTimer=999;
+    const modele=BOSS_DEFS[[4,6,7,12][Math.floor(g.wave/18)%4]];
+    g.bossDef={...modele, nom:modele.nom+' \u2022 V'+g.wave,
+               hpMult:modele.hpMult*(1+g.wave*0.04)};
+    declencherBoss(g);
+  } else if(g.wave>=8 && g.wave%6===0 && !g.boss){
+    g.bossSpawned=false; g.bossTimer=999;
+    const modele=BOSS_DEFS[[4,6,7][Math.floor(g.wave/6)%3]];
+    g.bossDef={...modele, nom:'\u00c9CLAIREUR \u2022 V'+g.wave,
+               hpMult:Math.max(2, modele.hpMult*0.5*(1+g.wave*0.03)),
+               rayon:modele.rayon*0.8, phase2:false, invoque:false, mini:true};
+    declencherBoss(g);
+  }
+}
+/* ============================================================
+   COURBE DE DIFFICULTE
+   Regle : les premieres vagues doivent laisser respirer, la montee
+   doit etre reguliere, et il faut un plancher pour que ca ne devienne
+   jamais injouable. Valeur retournee = nombre de frames entre deux
+   apparitions : plus le nombre est grand, plus c'est calme.
+   ============================================================ */
+function cadenceSpawn(g){
+  const m = g.mode.spawn || 1;          /* le mode choisi reste determinant */
+  const f = g.mode.flux || 1;           /* facteur de difficulte */
+  /* Le plancher suit la difficulte : en Normal la partie reste tenable
+     meme tres loin, en Extreme on accepte que ca devienne etouffant. */
+  const plancher = f>=1 ? 22 : (f>=0.7 ? 18 : 14);
+  if(g.infini){
+    /* Trois vagues d'echauffement avant que la pression ne monte */
+    const echauffement = g.wave<=3 ? (1.8 - (g.wave-1)*0.27) : 1;
+    return Math.max(plancher, (96 - g.wave*2.4) * m * f * echauffement * g.spawnMult);
+  }
+  let base = (78 - g.wave*2.6) * m * f;
+  if(g.meca==='marathon') base*=0.62;    /* Point de rupture : flux continu assume */
+  return Math.max(plancher, base);
+}
+
+/* Types d'ennemis debloques progressivement */
+function typeInfini(vague){
+  /* Un seul type nouveau a la fois, avec de la place pour l'assimiler */
+  const dispo=['chasseur'];
+  if(vague>3)  dispo.push('tireur');
+  if(vague>6)  dispo.push('kamikaze');
+  if(vague>9)  dispo.push('diviseur');
+  if(vague>12) dispo.push('tank');
+  if(vague>15) dispo.push('bouclier');
+  if(vague>19) dispo.push('teleport');
+  if(vague>23) dispo.push('poseur');
+  /* Passe la vague 13 on repioche plus souvent dans le haut du panier :
+     la difficulte ne vient plus seulement du nombre. */
+  if(vague>13){
+    const lourds=dispo.filter(k=>['tank','bouclier','teleport','poseur','diviseur'].includes(k));
+    if(lourds.length && Math.random()<0.45) return lourds[Math.floor(Math.random()*lourds.length)];
+  }
+  return dispo[Math.floor(Math.random()*dispo.length)];
+}
+
+/* ============================================================
+   FIN CINEMATIQUE — apres la chute du Nexus
+   ============================================================ */
+const FINAL_TXT=[
+  "Le Nexus se disperse en poussi\u00e8re de donn\u00e9es.",
+  "Les Chaos Nodes s'\u00e9teignent un \u00e0 un, secteur apr\u00e8s secteur.",
+  "Genesis respire enfin. Les mondes se reconnectent.",
+  "Le QG t'appelle. Tu ne r\u00e9ponds pas tout de suite.",
+  "Quelque part dans le r\u00e9seau, une ligne de code se recompose doucement.",
+  "\u2014 mais \u00e7a, c'est une autre mission."
+];
+function lancerFinal(){
+  const ov=document.getElementById('final'), bloc=document.getElementById('final-bloc');
+  if(!ov||!bloc) return;
+  Audio2.jouerMusique('menu');
+  bloc.innerHTML=FINAL_TXT.map((t,i)=>
+    '<div class="lig" style="animation-delay:'+(i*1.7+0.4)+'s">'+t+'</div>').join('')+
+    '<div class="fin" style="animation-delay:'+(FINAL_TXT.length*1.7+1)+'s">FIN</div>'+
+    '<div class="lig" style="animation-delay:'+(FINAL_TXT.length*1.7+2.4)+'s;font-size:11px;color:#6b7280;margin-top:22px">'+
+    'Appuyer pour revenir au QG</div>';
+  ov.classList.add('on');
+  setTimeout(()=>{ ov.onclick=()=>{ ov.classList.remove('on'); ov.onclick=null; show('home'); }; },
+             (FINAL_TXT.length*1.7+2.4)*1000);
+}
+
+/* ============================================================
+   MENU PAUSE — accessible en pleine partie
+   ============================================================ */
+let _enPause=false;
+function basculerPause(){ _enPause ? reprendrePartie() : mettreEnPause(); }
+function mettreEnPause(){
+  if(!G || !G.running || _enPause || G.demo) return;
+  _enPause=true;
+  G.running=false;                       /* stoppe la boucle : le jeu se fige */
+  cancelAnimationFrame(G.raf);
+  stopMusic();
+  majTogglesPause();
+  const info=document.getElementById('pause-info');
+  if(info) info.textContent='Vague '+G.wave+'  \u2022  '+G.score+' pts  \u2022  '+G.lives+' vies';
+  document.getElementById('pause').classList.add('on');
+  Audio2.jouerSfx('button_click');
+}
+function reprendrePartie(){
+  if(!_enPause) return;
+  _enPause=false;
+  document.getElementById('pause').classList.remove('on');
+  if(G){ G.running=true; G.lastShot=performance.now(); startMusic(); loop(); }
+}
+function quitterPartie(){
+  _enPause=false;
+  document.getElementById('pause').classList.remove('on');
+  abortMission();
+  Audio2.jouerMusique('menu');
+}
+function majTogglesPause(){
+  if(!S.prefs) S.prefs={...DEFAULT_PREFS};
+  [['son','p-son'],['musique','p-musique'],['vibration','p-vibration']].forEach(([k,id])=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle('on', !!S.prefs[k]);
+  });
+  const seg=document.getElementById('p-particules');
+  if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===S.prefs.particules));
+}
+/* Les reglages de la pause pilotent les memes preferences que l'ecran Reglages */
+function togglePrefPause(cle){ togglePref(cle); majTogglesPause(); }
+function setParticulesPause(v){ setParticules(v); majTogglesPause(); }
+
+/* ============================================================
+   MODE DEMO ATTRACT — partie auto-jouee pour les captures du trailer
+   ============================================================ */
+/* ============================================================
+   MODE DEMO — attract mode facon borne d'arcade
+   4 sequences contrastees : 2 secteurs de combat, 2 boss,
+   sur les deux cartes. Enchainement automatique, en boucle.
+   ============================================================ */
+/* ============================================================
+   TRAILER — sept tableaux enchaines, pense pour etre filme.
+   Chaque sequence change de decor, de vaisseau et d'adversaire :
+   deux campagnes, quatre boss, six vaisseaux differents.
+   Duree totale : 2 min 15 environ, puis ca reboucle.
+   ============================================================ */
+/* mun : chaque tableau montre aussi une munition differente — sans ca, les
+   sept sequences se ressemblaient malgre les sept vaisseaux. */
+const DEMO_SEQ = [
+  {node:2,  diff:'normal',    ship:0,  mun:'std',    duree:15000, nom:'GENESIS • CHAMP D’ASTÉROÏDES',
+   accroche:'Esquive, tir continu, tout se joue au placement'},
+  {node:4,  diff:'difficile', ship:2,  mun:'perf',   duree:22000, nom:'VORTEX • PREMIER BOSS',
+   accroche:'Spirale de disques • PV ×5 • 2 phases'},
+  {node:9,  diff:'difficile', ship:5,  mun:'hyper',  duree:15000, nom:'DÉBRIS OUBLIÉS • GRAVITÉ ZÉRO',
+   accroche:'Secteur secret • l’inertie devient l’ennemie'},
+  {node:12, diff:'difficile', ship:4,  mun:'spread', duree:24000, nom:'NEXUS • BOSS FINAL GENESIS',
+   accroche:'PV ×16 • 3 phases • change de forme'},
+  {node:15, diff:'difficile', ship:7,  mun:'hyper',  duree:15000, nom:'CHAOS PROTOCOL • MEUTE D’ÉLITE',
+   accroche:'Seconde campagne • bestiaire entièrement différent'},
+  {node:16, diff:'extreme',   ship:10, mun:'perf',   duree:22000, nom:'FRACTURE • ANOMALIE',
+   accroche:'PV ×17 • 3 formes • difficulté Extrême'},
+  {node:21, diff:'extreme',   ship:11, mun:'spread', duree:26000, nom:'NEXUS PRIME • BOSS ULTIME',
+   accroche:'PV ×26 • 5 mutations successives'}
+];
+let _demoActive=false, _demoIdx=0, _demoTimer=null, _demoSnap=null, _demoVus=0;
+
+function lancerDemo(){
+  if(_demoActive) return;
+  _demoActive=true;
+  _demoSnap = JSON.stringify(S);            /* la demo ne doit rien laisser derriere elle */
+  _demoIdx = 0;   /* un trailer se regarde depuis le debut */
+  _demoVus = 0;
+  const el=document.getElementById('splash'); if(el) el.classList.add('parti');
+  _splashParti=true;
+  const badge=document.createElement('div');
+  badge.id='badge-demo';
+  badge.style.cssText='position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:90;'+
+    'font-family:Orbitron,sans-serif;font-size:10px;color:#14F195;text-align:center;'+
+    'background:rgba(0,0,0,.68);padding:8px 16px;border-radius:13px;max-width:92vw;'+
+    'border:1px solid rgba(20,241,149,.32);backdrop-filter:blur(6px)';
+  document.body.appendChild(badge);
+  /* Tout geste rend la main immediatement, quel qu'il soit. */
+  ['touchstart','mousedown','keydown','wheel','pointerdown'].forEach(ev=>
+    document.addEventListener(ev, arreterDemo, {once:true, passive:true}));
+  demoSequence();
+}
+
+/* Joue la sequence courante puis programme la suivante */
+function demoSequence(){
+  if(!_demoActive) return;
+  if(!_demoSnap) _demoSnap=JSON.stringify(S);   /* filet : jamais de sequence sans snapshot */
+  if(G && G.running){ G.running=false; cancelAnimationFrame(G.raf); }
+  const sq = DEMO_SEQ[_demoIdx % DEMO_SEQ.length];
+  const nd = NODES.find(x=>x.id===sq.node);
+
+  S.connected=true;
+  S.currentNode=sq.node;
+  S.carteActive=(nd&&nd.carte===2)?2:1;
+  S.trVues=(S.trVues||[]).concat(sq.node);   /* jamais de transmission en demo */
+  loadout.difficulte=sq.diff;
+  /* Vitrine du hangar : un vaisseau different a chaque tableau, avec sa
+     signature de tir. Le snapshot restaure l'equipement du joueur a la fin. */
+  if(sq.ship!==undefined){
+    if(!S.unlocked.includes(sq.ship)) S.unlocked=S.unlocked.concat(sq.ship);
+    S.ship=sq.ship; loadout.ship=sq.ship;
+  }
+  /* Munition de la sequence, avec repli si l'identifiant est inconnu. */
+  loadout.munition = (sq.mun && MUNITIONS.some(m=>m.id===sq.mun)) ? sq.mun : 'std';
+
+  const badge=document.getElementById('badge-demo');
+  if(badge){
+    const v=SHIPS[S.ship];
+    badge.innerHTML='<b style="letter-spacing:2.5px">'+sq.nom+'</b>'+
+      '<i style="display:block;font-style:normal;font-size:8.5px;letter-spacing:.6px;'+
+      'color:#9ca3af;margin-top:3px">'+sq.accroche+'</i>'+
+      '<i style="display:block;font-style:normal;font-size:8px;letter-spacing:1.2px;'+
+      'color:#6b7280;margin-top:2px">'+(v?v.name.toUpperCase():'')+
+      ' • '+((MUNITIONS.find(m=>m.id===loadout.munition)||MUNITIONS[0]).name.toUpperCase())+
+      ' • '+((_demoIdx%DEMO_SEQ.length)+1)+'/'+DEMO_SEQ.length+'</i>';
+  }
+
+  launchMission();
+  if(!G){ arreterDemo(); return; }
+  G.demo=true; G.lives=99;
+  S.charges={mitra:3, nuke:3, ghost:3};      /* de quoi montrer tous les effets */
+
+  _demoVus=(_demoVus||0)+1;
+  if(_demoVus>=DEMO_SEQ.length) debloquerSecret('arcade');   /* spectateur patient */
+  clearTimeout(_demoTimer);
+  _demoTimer=setTimeout(()=>{ _demoIdx++; demoSequence(); }, sq.duree);
+}
+
+function arreterDemo(){
+  if(!_demoActive) return; _demoActive=false;
+  clearTimeout(_demoTimer);
+  if(G&&G.running){ G.running=false; cancelAnimationFrame(G.raf); stopMusic(); }
+  const b=document.getElementById('badge-demo'); if(b) b.remove();
+  /* Restauration integrale de la sauvegarde du joueur */
+  const secretsDemo=(S.secrets||[]).slice();
+  if(_demoSnap){
+    try{ const av=JSON.parse(_demoSnap);
+      Object.keys(S).forEach(k=>{ if(!(k in av)) delete S[k]; });
+      Object.assign(S, av);
+    }catch(e){}
+    _demoSnap=null;
+  }
+  /* Un secret decouvert PENDANT la demo survit a la restauration,
+     avec sa recompense — mais rien d'autre de la demo n'est conserve. */
+  secretsDemo.forEach(id=>{
+    if((S.secrets||[]).includes(id)) return;
+    const sc=SECRETS.find(x=>x.id===id); if(!sc) return;
+    S.secrets=(S.secrets||[]).concat(id);
+    S.skr+=sc.gc;
+  });
+  /* On rend la main a l'accueil. Remettre le splash par-dessus tout donnait
+     l'impression d'une application figee : plus rien ne defilait et il
+     fallait deviner qu'un appui supplementaire etait attendu. */
+  const el=document.getElementById('splash');
+  if(el){ el.classList.add('parti'); el.style.display='none'; }
+  _splashParti=true;
+  show('home');
+  /* _demoActive est deja retombe a false : ce save ecrit bien l'etat restaure. */
+  save();
+  ui(); armerDemo(); armerVeille();
+}
+
+/* ============================================================
+   VEILLE — aucune action pendant VEILLE_MS hors partie :
+   retour a l'accueil puis attract mode.
+   ============================================================ */
+const VEILLE_MS = 60000;
+let _veilleTimer=null;
+function armerVeille(){
+  clearTimeout(_veilleTimer);
+  _veilleTimer=setTimeout(()=>{
+    if(_demoActive) return;
+    if(G && G.running && !G.demo) return armerVeille();   /* partie en cours : on ne coupe rien */
+    if(!_splashParti) return armerVeille();               /* deja sur le splash : armerDemo gere */
+    show('home');
+    const el=document.getElementById('splash');
+    if(el){ el.classList.remove('parti'); el.style.display='flex'; }
+    _splashParti=false;
+    setTimeout(()=>{ if(!_splashParti) lancerDemo(); }, 3000);
+  }, VEILLE_MS);
+}
+['touchstart','mousedown','keydown','wheel'].forEach(ev=>
+  document.addEventListener(ev, ()=>{ if(!_demoActive) armerVeille(); }, {passive:true}));
+
+/* Pilote automatique : fuit la menace la plus proche, sinon va chercher les orbes */
+/* Pilote de demonstration : joue proprement, reste au centre, utilise ses bonus.
+   Objectif : produire de belles images pour le trailer. */
+function piloteAuto(g){
+  const p=g.player;
+  let fx=0, fy=0;
+
+  /* 1. Esquive predictive : on evalue ou sera le projectile dans 12 frames */
+  g.eBullets.forEach(b=>{
+    const px=b.x+b.vx*12, py=b.y+b.vy*12;
+    const dx=p.x-px, dy=p.y-py, d2=dx*dx+dy*dy;
+    if(d2<30000 && d2>1){ const f=3400/d2; fx+=dx*f; fy+=dy*f; }
+  });
+  /* 2. Distance de securite avec les ennemis */
+  g.enemies.forEach(e=>{
+    const dx=p.x-e.x, dy=p.y-e.y, d2=dx*dx+dy*dy;
+    if(d2<24000 && d2>1){ const f=2400/d2; fx+=dx*f; fy+=dy*f; }
+  });
+  if(g.boss && !g.boss.entree){
+    const dx=p.x-g.boss.x, dy=p.y-g.boss.y, d=Math.hypot(dx,dy)||1;
+    if(d<210){ fx+=dx/d*2.2; fy+=dy/d*2.2; }
+  }
+
+  const menace=Math.hypot(fx,fy);
+
+  /* 3. Quand c'est calme : viser une cible et ramasser le butin */
+  if(menace<1.4){
+    let butin=null, bd=1e9;
+    g.orbs.forEach(o=>{ const d=Math.hypot(o.x-p.x,o.y-p.y); if(d<bd){bd=d;butin=o;} });
+    if(butin && bd<260){ fx+=(butin.x-p.x)*0.08; fy+=(butin.y-p.y)*0.08; }
+    else {
+      /* se placer sous la cible la plus proche pour l'aligner */
+      let cible=g.boss && !g.boss.entree ? g.boss : null, cd=cible?Math.hypot(cible.x-p.x,cible.y-p.y):1e9;
+      g.enemies.forEach(e=>{ const d=Math.hypot(e.x-p.x,e.y-p.y); if(d<cd){cd=d;cible=e;} });
+      if(cible) fx+=(cible.x-p.x)*0.055;
+    }
+  }
+
+  /* 4. Ancrage : le vaisseau vit dans le tiers bas, jamais colle aux bords */
+  const zoneY=g.h*0.74;
+  fy+=(zoneY-p.y)*0.038;
+  /* Rappel central : le vaisseau doit rester dans le champ, pas raser les bords */
+  const ecart=(p.x-g.w*0.5)/(g.w*0.5);          /* -1 a 1 */
+  fx-=ecart*ecart*ecart*7.5;                     /* rappel qui grandit vite vers l'exterieur */
+  fx+=(g.w*0.5-p.x)*0.045;
+  const marge=Math.min(115, g.w*0.28);
+  if(p.x<marge)      fx+=(marge-p.x)*0.30;
+  if(p.x>g.w-marge)  fx-=(p.x-(g.w-marge))*0.30;
+
+  /* Degagement : coince trop longtemps sur un flanc, il traverse l'ecran.
+     Sans ca, sous pression, le pilote reste scotche au bord. */
+  const auBord = p.x<g.w*0.22 || p.x>g.w*0.78;
+  g.demoBord = auBord ? (g.demoBord||0)+1 : 0;
+  if(g.demoBord>45){
+    g.demoTraverse = (p.x<g.w*0.5) ? 1 : -1;
+    g.demoBord=0; g.demoTraverseT=70;
+  }
+  if(g.demoTraverseT>0){
+    g.demoTraverseT--;
+    fx += g.demoTraverse*9;          /* priorite absolue : rejoindre le centre */
+    fy += 0.6;
+  }
+
+  /* 5. Deplacement lisse */
+  const norme=Math.hypot(fx,fy)||1;
+  const vitesse=Math.min(6.8, norme);
+  g.demoVx=(g.demoVx||0)*0.72 + (fx/norme*vitesse)*0.28;
+  g.demoVy=(g.demoVy||0)*0.72 + (fy/norme*vitesse)*0.28;
+  p.x+=g.demoVx; p.y+=g.demoVy;
+  p.x=Math.max(34,Math.min(g.w-34,p.x));
+  p.y=Math.max(120,Math.min(g.h-60,p.y));
+
+  /* 6. Utilisation des bonus, comme un joueur qui sait jouer */
+  g.demoTempo=(g.demoTempo||0)+1;
+  if(g.cooldownBonus<=0 && g.demoTempo>150){
+    const menaceForte = g.enemies.length>=7 || g.eBullets.length>=26;
+    if(menaceForte && (S.charges.nuke||0)>0){ activerBonus('nuke'); g.demoTempo=0; }
+    else if(g.boss && !g.boss.entree && (S.charges.mitra||0)>0 && g.bonusActive!=='mitra'){
+      activerBonus('mitra'); g.demoTempo=0;
+    }
+    else if(!g.companions && (S.charges.ghost||0)>0 && g.wave>=2){
+      activerBonus('ghost'); g.demoTempo=0;
+    }
+  }
+  /* La demo ne doit jamais tomber a court de charges */
+  if(g.frame%900===0){ S.charges.mitra=Math.max(S.charges.mitra,1);
+                       S.charges.nuke=Math.max(S.charges.nuke,1);
+                       S.charges.ghost=Math.max(S.charges.ghost,1); }
+}
+
+/* ============================================================
+   SEEKER TASK — vraies transactions on-chain (devnet)
+   Chaque action de jeu marquante envoie une transaction signee
+   par le joueur : c'est ce qui construit son activite Solana.
+   ============================================================ */
+/* Tresorerie du jeu. Un pourboire volontaire, preleve UNE fois sur la Seeker
+   Task, jamais sur le gameplay : la boutique, les consommables et les
+   munitions restent integralement en GC gagnes en jouant. */
+/* SKR : le token officiel de Solana Mobile (SPL). Deuxieme moyen de paiement
+   des vaisseaux, a cote du SOL. Le gameplay, lui, ne coute jamais de token :
+   boutique, consommables et munitions restent en GC gagnes en jouant. */
+const SKR = {
+  /* Mint officiel sur mainnet. Sur devnet ce mint n'existe pas : renseigne
+     mintTest avec un mint de test dont tu controles l'emission. */
+  mint:     'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
+  mintTest: '',                 /* mint devnet, vide = on retombe sur mint */
+  decimales: 6,                 /* relu depuis la chaine au premier chargement */
+  module:   'https://esm.sh/@solana/spl-token@0.4',
+  mod: null, actif: true
+};
+function mintSKR(){ return (CHAINE.rpc.indexOf('devnet')>=0 && SKR.mintTest) ? SKR.mintTest : SKR.mint; }
+/* Le mint SKR officiel vit sur mainnet. Sur devnet, sans mint de test
+   renseigne, aucun paiement SKR ne peut aboutir : on l'annonce au lieu de
+   laisser le RPC repondre « could not find mint ». */
+function skrIndisponible(){
+  return CHAINE.rpc.indexOf('devnet')>=0 && !SKR.mintTest;
+}
+
+/* Dons : totalement facultatifs, jamais reclames par le jeu. L'adresse est
+   affichee en clair et copiable pour qu'on puisse aussi donner depuis
+   n'importe quel wallet, sans passer par le jeu. */
+const DONS = {
+  adresse: 'AVhVM29hD6YRLb2DujhKfF8Ger4bgaCpx9P93Q3XBWSH',
+  sol: [0.01, 0.05, 0.25],
+  skr: [500, 2500, 10000],
+  actif: true
+};
+
+const TRESORERIE = {
+  adresse: 'AVhVM29hD6YRLb2DujhKfF8Ger4bgaCpx9P93Q3XBWSH',  /* tresorerie du jeu, devnet */
+  frais:   0.001,        /* SOL preleves une fois pour les 15 memos */
+  actif:   true
+};
+/* Le RPC public de Solana limite chaque IP a une centaine d'appels par
+   tranche de 10 s — et depuis une IP mobile partagee, le quota est deja
+   consomme par d'autres : on recoit un 429 des le premier appel.
+   D'ou un pool, une rotation, et surtout la possibilite pour le joueur de
+   coller SON endpoint dans les reglages (Helius, QuickNode, Alchemy...).
+   Un endpoint personnel passe en tete et regle le probleme definitivement. */
+/* Clef Helius du projet, assemblee a l'execution.
+   Ce n'est PAS de la securite : n'importe qui peut lire la valeur dans la
+   console. C'est uniquement pour echapper aux robots qui scannent les pages
+   et les depots publics a la recherche du motif d'un UUID — ce sont eux qui
+   brulent les quotas, pas des attaquants motives.
+   Le plan gratuit Helius ne permet pas de restreindre par domaine ; le vrai
+   filet, c'est la bascule automatique : si la clef est epuisee (429) ou
+   revoquee (401), l'endpoint est ecarte et le jeu continue sur les publics. */
+const _clefHelius = ['fc3853b9','07dd','4f31','9ba3','af7d0ddf8ecc'].join('-');
+const RPC_DEVNET_DEFAUT = [
+  'https://devnet.helius-rpc.com/?api-key='+_clefHelius,
+  'https://api.devnet.solana.com',     /* officiel : sature en permanence */
+  'https://solana-devnet.g.alchemy.com/v2/demo',   /* clef de demo, souvent 401 */
+  'https://solana-devnet.api.onfinality.io/public' /* public sans clef */
+];
+let RPC_DEVNET = RPC_DEVNET_DEFAUT.slice();
+/* Endpoints qui ont repondu n'importe quoi : on ne les rappelle plus de la
+   session. Sans ca, la rotation revenait indefiniment sur un RPC mort. */
+let RPC_MORTS = {};
+const CHAINE = {
+  rpc:RPC_DEVNET[0], rpcIndex:0,
+  web3:'https://esm.sh/@solana/web3.js@1',
+  memoProgram:'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+  mod:null, connexion:null, enCours:false
+};
+async function chargerWeb3(){
+  if(CHAINE.mod) return CHAINE.mod;
+  try{
+    CHAINE.mod = await import(/* @vite-ignore */ CHAINE.web3);
+    CHAINE.connexion = new CHAINE.mod.Connection(CHAINE.rpc, 'confirmed');
+    LOG.log('[SEEKER] web3.js charge');
+    return CHAINE.mod;
+  }catch(e){ LOG.warn('[SEEKER] web3.js indisponible : '+(e&&e.message)); return null; }
+}
+
+/* Remet le pool a plat : l'endpoint du joueur d'abord, puis les publics. */
+function reconstruirePool(){
+  const perso = String((S && S.rpcPerso) || '').trim();
+  RPC_DEVNET = perso ? [perso].concat(RPC_DEVNET_DEFAUT) : RPC_DEVNET_DEFAUT.slice();
+  RPC_MORTS = {};
+  CHAINE.rpcIndex = 0;
+  CHAINE.rpc = RPC_DEVNET[0];
+  invaliderBlockhash();
+  if(CHAINE.mod){ try{ CHAINE.connexion = new CHAINE.mod.Connection(CHAINE.rpc,'confirmed'); }catch(e){} }
+  return CHAINE.rpc;
+}
+/* Reconnaissance d'une saturation du RPC : 429, « rate limit », « too many ». */
+function estSature(e){
+  const m=String((e&&(e.message||e))||'').toLowerCase();
+  return m.indexOf('429')>=0 || m.indexOf('rate limit')>=0 || m.indexOf('too many')>=0;
+}
+/* Un RPC peut aussi etre casse sans etre sature : passe derriere un paywall,
+   il renvoie une reponse que web3.js n'arrive pas a lire
+   (« Expected the value to satisfy a union of type|type »), ou un 401/403.
+   Dans tous ces cas la bonne reaction est la meme : changer d'endpoint,
+   surtout pas declarer la transaction perdue. */
+function estRpcCasse(e){
+  const m=String((e&&(e.message||e))||'').toLowerCase();
+  /* Un `timeout:` vient de NOTRE horloge et vise le wallet, pas l'endpoint.
+     Sans ce filtre, un joueur qui tarde a signer ferait ecarter un RPC sain
+     pour toute la session — RPC_MORTS n'est vide que par reconstruirePool().
+     Aujourd'hui aucun chemin ne l'amene ici ; c'est une garde pour demain. */
+  if(m.indexOf('timeout:')===0) return false;
+  if(estSature(e)) return true;
+  return m.indexOf('union of')>=0
+      || m.indexOf('expected the value to satisfy')>=0
+      || m.indexOf('failed to fetch')>=0
+      || m.indexOf('networkerror')>=0
+      || m.indexOf('load failed')>=0
+      || m.indexOf('unauthorized')>=0
+      || m.indexOf('forbidden')>=0
+      || m.indexOf('timeout')>=0
+      || /\b(401|403|500|502|503|504)\b/.test(m);
+}
+/* Marque l'endpoint courant comme inutilisable pour le reste de la session. */
+function marquerRpcMort(raison){
+  RPC_MORTS[CHAINE.rpc]=true;
+  LOG.warn('[SEEKER] RPC ecarte : '+CHAINE.rpc+' ('+String(raison||'').slice(0,60)+')');
+}
+/* Vrai si plus aucun endpoint du pool n'est utilisable. */
+function poolEpuise(){ return RPC_DEVNET.every(u=>RPC_MORTS[u]); }
+/* Passe au RPC suivant encore vivant et reconstruit la connexion.
+   Retourne false si le pool est epuise : l'appelant doit alors abandonner
+   proprement plutot que de tourner en rond. */
+function rpcSuivant(){
+  if(!CHAINE.mod) return false;
+  if(poolEpuise()) return false;
+  for(let n=0; n<RPC_DEVNET.length; n++){
+    CHAINE.rpcIndex = (CHAINE.rpcIndex+1) % RPC_DEVNET.length;
+    const url = RPC_DEVNET[CHAINE.rpcIndex];
+    if(RPC_MORTS[url]) continue;
+    CHAINE.rpc = url;
+    try{ CHAINE.connexion = new CHAINE.mod.Connection(CHAINE.rpc, 'confirmed'); }catch(e){ continue; }
+    LOG.warn('[SEEKER] bascule sur '+CHAINE.rpc);
+    return true;
+  }
+  return false;
+}
+const pause = ms => new Promise(r=>setTimeout(r,ms));
+
+/* Marqueur unique pour differencier deux transactions par ailleurs
+   identiques. L'horloge seule ne suffit pas : deux appels dans la meme
+   milliseconde rendaient la meme valeur, donc la meme signature. */
+let _seqMemo = 0;
+function marqueurUnique(){
+  return Date.now().toString(36) + '-' + ((_seqMemo++) % 46656).toString(36);
+}
+
+/* Un blockhash reste valide environ une minute (150 blocs). Le redemander a
+   chaque envoi etait la source principale des 429 : on le garde en memoire.
+   La fenetre est nommee pour que les tests ne codent pas le nombre en dur. */
+const BH_FENETRE = 40000;
+CHAINE.bhCache=null; CHAINE.bhTemps=0;
+/* A appeler des qu'une transaction echoue sur un blockhash perime : sans ca,
+   le cache reservait la meme valeur morte pendant 40 s et TOUTES les relances
+   echouaient d'affilee. */
+function invaliderBlockhash(){ CHAINE.bhCache=null; CHAINE.bhTemps=0; }
+/* Duree de vie d'un blockhash : 150 blocs, soit 60 a 80 s selon la charge.
+   On retient 52 s, pas 60. Deux raisons cumulees :
+   - les 150 blocs courent depuis la CREATION du blockhash, pas depuis
+     l'instant ou le RPC nous le rend : il arrive deja vieux de 1 a 3 s ;
+   - a 55 s le budget tombait a l'egalite exacte (45 + 7 + 3 = 55), sans le
+     moindre jeu : une diffusion a 7,5 s au lieu de 7 faisait basculer.
+   A 52 s, le pire cas garde 3 s de coussin. */
+const BH_VIE = 52000;
+/* Ce qui s'ecoule APRES la signature, avant que la transaction n'atteigne le
+   reseau : reprises de diffusion (0,8 + 1,6 + 2,4 s) et allers-retours. Sans
+   cette part, le budget etait juste... sauf quand le RPC sature, c'est-a-dire
+   exactement le cas pour lequel `diffuser()` existe. */
+const DELAI_DIFFUSION = 7000;
+/* Coussin garde en reserve. Sans lui, le pire cas tombait a l'egalite exacte
+   avec la duree de vie du blockhash : une diffusion a 7,5 s au lieu de 7
+   suffisait a faire expirer la transaction. Il est deduit du budget, donc
+   jamais consomme par le calcul de fraicheur. */
+const BH_COUSSIN = 3000;
+/* Budget quand une signature est attendue : la fenetre de cache reellement
+   utilisable vaut
+     BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION - BH_COUSSIN = 52-40-7-3 = 2 s.
+   C'est infime, et c'est voulu : en pratique chaque envoi signe repart d'un
+   blockhash frais. Le double appui, lui, est bloque par CHAINE.enCours pose
+   avant tout `await`, pas par ce cache. */
+/* `marge` = temps qui va encore s'ecouler avant la diffusion, typiquement
+   l'attente de signature. Un blockhash de 39 s garde en cache, suivi de 45 s
+   de signature, arrivait perime sur le reseau : on en reprend un frais si le
+   compte n'y est pas. */
+async function blockhashFrais(marge){
+  const m = (typeof marge==='number') ? marge : 0;
+  const now=Date.now();
+  const age = now - CHAINE.bhTemps;
+  if(CHAINE.bhCache && age < BH_FENETRE && age + m + BH_COUSSIN <= BH_VIE) return CHAINE.bhCache;
+  let derniere=null;
+  /* Au moins un essai par endpoint, plus une reprise sur le premier. */
+  const essais = Math.max(4, RPC_DEVNET.length+2);
+  for(let essai=0; essai<essais; essai++){
+    try{
+      const r = await CHAINE.connexion.getLatestBlockhash();
+      CHAINE.bhCache = r.blockhash; CHAINE.bhTemps = Date.now();
+      return CHAINE.bhCache;
+    }catch(e){
+      derniere=e;
+      if(!estRpcCasse(e)) throw e;
+      /* Sature = passager, on y reviendra. Casse = on l'ecarte pour de bon. */
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      if(!rpcSuivant()) throw new Error('AUCUN_RPC');
+      await pause(estSature(e) ? 800*(essai+1) : 150);
+    }
+  }
+  throw derniere || new Error('AUCUN_RPC');
+}
+/* Diffusion avec reprise : meme logique que pour le blockhash.
+   `echeance` est l'instant au-dela duquel le blockhash sera expire. Passe ce
+   point, chaque nouvelle tentative est GARANTIE perdante : elle ne fait que
+   retarder le message d'erreur. On rend la main au lieu d'epuiser les essais.
+   DELAI_DIFFUSION reste une estimation du temps de diffusion — c'est cette
+   echeance qui en fait une borne. */
+async function diffuser(brut, echeance){
+  let derniere=null;
+  const essais = Math.max(4, RPC_DEVNET.length+2);
+  for(let essai=0; essai<essais; essai++){
+    try{ return await CHAINE.connexion.sendRawTransaction(brut); }
+    catch(e){
+      derniere=e;
+      if(!estRpcCasse(e)) throw e;
+      /* L'echeance se juge AVANT d'ecarter l'endpoint : passe ce point on
+         abandonne de toute facon, et un reseau mobile lent n'est pas une
+         panne de RPC. Sinon un seul `failed to fetch` tardif condamnait
+         Helius pour toute la session. */
+      if(echeance && Date.now() > echeance) throw new Error('blockhash not found : echeance depassee');
+      if(!estSature(e)) marquerRpcMort(e&&e.message);
+      if(!rpcSuivant()) throw new Error('AUCUN_RPC');
+      await pause(estSature(e) ? 800*(essai+1) : 150);
+    }
+  }
+  throw derniere || new Error('AUCUN_RPC');
+}
+/* Traduit une erreur technique en une phrase comprehensible. */
+function causeLisible(e){
+  /* Un rejet peut arriver en objet sans message : String() rendait alors
+     « [object Object] », affiche tel quel au joueur. On le neutralise. */
+  let brut=String((e&&(e.message||e))||'');
+  if(brut==='[object Object]'){
+    try{ brut=JSON.stringify(e)||''; }catch(x){ brut=''; }
+    if(brut==='{}') brut='';
+  }
+  /* Plus aucun endpoint utilisable : on dit quoi faire, pas juste que ca rate. */
+  if(brut==='AUCUN_RPC' || poolEpuise()) return 'réseau devnet indisponible, réessaie dans 1 minute';
+  if(/union of|expected the value to satisfy/i.test(brut)) return 'serveur RPC indisponible, bascule automatique';
+  if(/\b(401|403)\b|unauthorized|forbidden/i.test(brut)) return 'RPC refuse l\'accès (clé requise) · bascule automatique';
+  if(estSature(e)) return 'reseau devnet saturé, patiente quelques secondes';
+  if(/blockhash not found|block height exceeded/i.test(brut)) return 'transaction expirée, relance-la';
+  if(/insufficient|0x1\b/i.test(brut)) return 'solde SOL devnet insuffisant';
+  /* Le wallet n'a jamais repondu : ce n'est pas un refus, on invite a reessayer. */
+  if(/^timeout:/.test(brut)){
+    /* Si c'est le wallet qui diffuse, sa demande peut encore aboutir apres
+       coup : on invite a verifier le journal plutot qu'a relancer aveugle. */
+    return CHAINE.canalAuto
+      ? 'le wallet n\'a pas répondu · vérifie le journal avant de relancer'
+      : 'le wallet n\'a pas répondu, réessaie';
+  }
+  /* Solflare dit « Transaction rejected », Backpack renvoie le code 4001 :
+     ni l'un ni l'autre n'etait reconnu, le joueur voyait l'anglais brut. */
+  if(/reject|refus|declined|denied|cancell?ed|\b4001\b/i.test(brut)) return 'signature refusée dans le wallet';
+  /* Deux fois la meme transaction dans la fenetre du blockhash. */
+  if(/already been processed|duplicate/i.test(brut)) return 'transaction déjà envoyée, patiente un instant';
+  /* Un rejet en objet vide donnait une chaine vide, donc le « erreur inconnue »
+     generique que l'on voulait justement supprimer. */
+  return brut.slice(0,70) || 'le wallet a refusé sans préciser la raison';
+}
+
+/* Retrouve le provider d'extension apres un rechargement de page.
+   Phantom et Backpack acceptent une reconnexion sans interaction quand le
+   site a deja ete autorise (onlyIfTrusted). */
+/* Un appel en vol est partage. `avecDelai` perd la course mais N'ANNULE PAS
+   la promesse : sans ce memo, amorcerWallet() puis signerEtEnvoyer() ouvraient
+   DEUX connexions au wallet, et la premiere pouvait renseigner _providerExt
+   puis ecraser S.addressComplete bien apres l'echec de l'envoi. */
+let _providerEnCours = null;
+async function retrouverProvider(){
+  if(_providerExt) return _providerExt;
+  if(_providerEnCours) return _providerEnCours;
+  _providerEnCours = _retrouverProviderReel().finally(()=>{ _providerEnCours = null; });
+  return _providerEnCours;
+}
+async function _retrouverProviderReel(){
+  if(_providerExt) return _providerExt;
+  if(!S.walletReel || S.walletType==='mwa') return null;
+  /* Sans filtre, un joueur Solflare dont l'extension tarde a s'injecter se
+     voyait servir Phantom, et le bloc « compte actif » plus bas ecrasait son
+     adresse par celle d'un AUTRE wallet, sans un mot. On ne cherche ailleurs
+     que si aucun wallet n'a ete choisi. */
+  const p = S.walletId ? getProvider(S.walletId)
+          : (getProvider('phantom') || getProvider('solflare') || window.solana);
+  if(!p) return null;
+  try{
+    if(!p.publicKey && typeof p.connect==='function'){
+      try{ await p.connect({ onlyIfTrusted:true }); }
+      catch(e){ dbg('reconnexion silencieuse refusee, on redemande'); await p.connect(); }
+    }
+    const pk=p.publicKey;
+    if(!pk) return null;
+    const w3=await chargerWeb3();
+    const adr=normaliserAdresse(pk, w3&&w3.PublicKey);
+    if(!adr) return null;
+    /* Le wallet a pu changer de compte entre-temps : on suit le compte actif. */
+    if(adr!==S.addressComplete){
+      /* On ne suit que le changement de compte DANS le wallet choisi : la
+         trace dit lequel, pour qu'un ecrasement se voie dans le journal. */
+      dbg('compte actif change dans '+(S.walletId||'solana')+', adresse mise a jour');
+      S.addressComplete=adr;
+      S.address=adr.slice(0,4)+'\u2026'+adr.slice(-4);
+      save(); ui();
+    }
+    _providerExt=p;
+    dbg('provider retrouve : '+(S.walletId||'solana'));
+    return p;
+  }catch(e){ dbg('reconnexion impossible : '+e.message); return null; }
+}
+
+/* Signe une transaction et la diffuse sur le devnet.
+   Trois canaux possibles selon la facon dont le joueur s'est connecte :
+   sans ce choix, la demande de signature partait dans le vide. */
+/* Aucun wallet ne garantit de repondre. Fenetre fermee par le systeme,
+   application wallet tuee en arriere-plan, WebView suspendue : la promesse
+   ne se resout NI ne rejette. Le `finally` de envoyerTxSeeker ne s'execute
+   alors jamais, le verrou reste pose et le bouton reste grise pour de bon.
+   Toute attente d'un wallet passe donc par une borne de temps. */
+/* 40 s. Ce n'est pas un choix de confort mais une contrainte physique :
+   au-dela, la transaction sera rejetee de toute facon.
+     BH_VIE (52) - DELAI_DIFFUSION (7) = 45 s : passe ce delai, meme un
+     blockhash tout frais est mort a l'arrivee.
+   Attendre plus longtemps ne rendrait pas service au joueur, cela lui ferait
+   signer pour rien. On s'arrete a 40 s, ce qui laisse 5 s de coussin, et on
+   le dit clairement plutot que de diffuser une transaction condamnee.
+   40 s restent confortables : basculer sur le wallet, s'authentifier,
+   confirmer. */
+const DELAI_SIGNATURE = 40000;
+const DELAI_RECONNEXION = 30000;
+function avecDelai(promesse, ms, quoi){
+  let t;
+  return Promise.race([
+    Promise.resolve(promesse).finally(()=>clearTimeout(t)),
+    new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error('timeout:'+quoi)), ms); })
+  ]);
+}
+/* Prepare le canal de signature SANS rien demander au joueur ni prendre de
+   blockhash. A appeler avant `blockhashFrais` : la branche de repli de
+   `retrouverProvider` fait `await p.connect()`, qui ouvre le wallet et peut
+   attendre jusqu'a 30 s. Prise apres, l'horloge du blockhash courait pendant
+   cette attente : 30 + 40 + 7 = 77 s pour un blockhash qui n'en vaut que 52.
+   Une fois amorce, l'appel interne a signerEtEnvoyer est instantane. */
+async function amorcerWallet(){
+  try{
+    if(S.walletType!=='mwa'){
+      await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
+      if(_providerExt) return true;
+    }
+    /* Seed Vault : on precharge le module, qui vient du reseau. L'autorisation
+       elle-meme reste dans signerEtEnvoyer, c'est elle qui parle au joueur. */
+    if(!navigateurIntegre()) await avecDelai(initMWA(), DELAI_RECONNEXION, 'chargement du wallet');
+  }catch(e){ /* on n'echoue pas ici : signerEtEnvoyer rejouera et tranchera */ }
+  return false;
+}
+
+async function signerEtEnvoyer(tx){
+  let sig=null;
+  /* Deux familles de canaux, et un delai depasse n'a pas le meme sens :
+     - signTransaction : NOUS diffusons. Un timeout survient avant l'envoi,
+       rien n'existe on-chain, la relance est sans danger.
+     - signAndSendTransaction / request / Seed Vault : LE WALLET diffuse. Un
+       timeout n'annule pas sa demande ; s'il repond apres coup, la
+       transaction part quand meme. Relancer a l'aveugle en cree deux.
+     On retient le canal pour adapter le message. */
+  CHAINE.canalAuto = false;
+  /* Une extension connectee avant un rechargement doit etre retrouvee,
+     sinon on basculait a tort vers le Seed Vault. */
+  await avecDelai(retrouverProvider(), DELAI_RECONNEXION, 'reconnexion');
+  if(_providerExt){
+    const p=_providerExt;
+    /* On demande la SIGNATURE, puis on diffuse nous-memes sur le devnet.
+       signAndSendTransaction diffuserait sur le reseau selectionne dans le
+       wallet (mainnet par defaut) : notre blockhash devnet y est inconnu. */
+    if(typeof p.signTransaction==='function'){
+      CHAINE.canalAuto = false;              /* c'est nous qui diffusons */
+      const signee = await avecDelai(p.signTransaction(tx), DELAI_SIGNATURE, 'signature');
+      /* L'echeance part de MAINTENANT : le temps passe a signer est deja
+         consomme, il reste au plus DELAI_DIFFUSION pour atteindre le reseau. */
+      sig = await diffuser(signee.serialize(), Date.now() + DELAI_DIFFUSION);
+      LOG.log('[SEEKER] signature via wallet puis diffusion devnet');
+    } else if(typeof p.signAndSendTransaction==='function'){
+      CHAINE.canalAuto = true;               /* le wallet diffuse lui-meme */
+      const r = await avecDelai(p.signAndSendTransaction(tx), DELAI_SIGNATURE, 'signature');
+      sig = (r && (r.signature || r)) || null;
+      LOG.log('[SEEKER] signature via wallet (signAndSendTransaction)');
+    } else if(typeof p.request==='function'){
+      CHAINE.canalAuto = true;
+      const r = await avecDelai(p.request({ method:'signAndSendTransaction', params:{ message: tx } }), DELAI_SIGNATURE, 'signature');
+      sig = (r && (r.signature || r)) || null;
+      LOG.log('[SEEKER] signature via extension (request)');
+    } else {
+      CHAINE.derniereErreur='ce wallet ne sait pas signer de transaction';
+      LOG.warn('[SEEKER] '+CHAINE.derniereErreur);
+    }
+  } else {
+    /* Le message « ouvre dans Chrome » ne vaut que pour le Seed Vault.
+       Si le joueur s'etait connecte par extension, la vraie cause est que
+       la session a ete perdue : on le dit clairement. */
+    if(S.walletType==='ext'){
+      CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
+      LOG.warn('[SEEKER] '+CHAINE.derniereErreur); return null;
+    }
+    if(navigateurIntegre()){
+      CHAINE.derniereErreur='navigateur du wallet : Seed Vault inaccessible, ouvre le jeu dans Chrome';
+      LOG.warn('[SEEKER] '+CHAINE.derniereErreur); return null;
+    }
+    const mwa = await initMWA();
+    if(!mwa || !mwa.transact){ CHAINE.derniereErreur='module Seed Vault non charge'; return null; }
+    /* Le Seed Vault peut lui aussi ne jamais revenir : meme borne. C'est lui
+       qui diffuse, donc un timeout n'annule pas forcement l'envoi. */
+    CHAINE.canalAuto = true;
+    const sigs = await avecDelai(mwa.transact(async (wallet)=>{
+      const jeton = localStorage.getItem('ss_mwa_token');
+      if(jeton){ try{ await wallet.reauthorize({ auth_token:jeton, identity:IDENTITE }); }catch(e){} }
+      return await wallet.signAndSendTransactions({ transactions:[tx] });
+    }), DELAI_SIGNATURE, 'signature');
+    sig = sigs && sigs[0];
+    LOG.log('[SEEKER] signature via Seed Vault');
+  }
+  if(sig && typeof sig!=='string' && sig.toString) sig=sig.toString();
+  return sig||null;
+}
+
+/* Charge la bibliotheque SPL, necessaire pour manipuler un token. */
+async function chargerSPL(){
+  if(SKR.mod) return SKR.mod;
+  try{
+    SKR.mod = await import(/* @vite-ignore */ SKR.module);
+    LOG.log('[SEEKER] spl-token charge');
+  }catch(e){ LOG.warn('[SEEKER] spl-token indisponible : '+(e&&e.message)); SKR.mod=null; }
+  return SKR.mod;
+}
+
+/* Lit le solde SKR du joueur directement sur la chaine.
+   Retourne un nombre de tokens (pas des unites brutes). */
+async function lireSoldeSKR(){
+  if(!S.walletReel || !S.addressComplete) return 0;
+  if(skrIndisponible()){ S.soldeSkr=0; return 0; }   /* situation attendue, pas une erreur */
+  const w3=await chargerWeb3(); if(!w3) return 0;
+  try{
+    const { PublicKey } = w3;
+    const proprio = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
+    const mint = new PublicKey(mintSKR());
+    /* Les decimales viennent du mint : les deviner serait une source d'erreur. */
+    try{
+      const info = await CHAINE.connexion.getParsedAccountInfo(mint);
+      const d = info && info.value && info.value.data && info.value.data.parsed
+              && info.value.data.parsed.info && info.value.data.parsed.info.decimals;
+      if(typeof d==='number') SKR.decimales=d;
+    }catch(e){}
+    const r = await CHAINE.connexion.getParsedTokenAccountsByOwner(proprio, { mint });
+    let total=0;
+    (r && r.value || []).forEach(c=>{
+      const m=c.account.data.parsed.info.tokenAmount;
+      total += Number(m.uiAmount||0);
+    });
+    S.soldeSkr = total;
+    return total;
+  }catch(e){ LOG.warn('[SEEKER] solde SKR illisible : '+(e&&e.message)); return S.soldeSkr||0; }
+}
+
+/* Construit la transaction de la Seeker Task : les 15 memos et le pourboire
+   de tresorerie tiennent dans UNE seule transaction, donc UNE seule signature.
+   Retourne la liste des instructions. */
+function instructionsSeekerTask(w3, joueur){
+  const { PublicKey, TransactionInstruction, SystemProgram } = w3;
+  const memo = new PublicKey(CHAINE.memoProgram);
+  const enc = (txt)=> (typeof Buffer!=='undefined' && Buffer.from)
+        ? Buffer.from(txt,'utf8') : new TextEncoder().encode(txt);
+  const instr=[];
+  /* Le pourboire d'abord : il apparait en tete de la transaction, donc
+     visible immediatement dans l'ecran de signature du wallet. */
+  if(TRESORERIE.actif && TRESORERIE.frais>0 && SystemProgram){
+    try{
+      instr.push(SystemProgram.transfer({
+        fromPubkey: joueur,
+        toPubkey: new PublicKey(TRESORERIE.adresse),
+        lamports: Math.round(TRESORERIE.frais*1e9)
+      }));
+    }catch(e){ LOG.warn('[SEEKER] pourboire ignore : '+(e&&e.message)); }
+  }
+  const lot = Date.now().toString(36);
+  for(let i=1;i<=15;i++){
+    instr.push(new TransactionInstruction({
+      keys: [{ pubkey: joueur, isSigner:true, isWritable:false }],
+      programId: memo,
+      data: enc('seeker-strike:task:'+lot+':'+i+'/15')
+    }));
+  }
+  return instr;
+}
+
+/* Envoie une transaction memo signee par le wallet du joueur.
+   Retourne la signature, ou null si l'envoi n'a pas abouti.
+   Si `action` vaut 'seeker-task', on envoie les 15 memos d'un coup. */
+async function envoyerTxSeeker(action){
+  if(!S.walletReel || !S.addressComplete) return null;    /* pas de wallet : rien on-chain */
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
+  if(CHAINE.enCours) return null;                          /* une transaction a la fois */
+  CHAINE.enCours=true;
+  try{
+    const w3 = await chargerWeb3();
+    if(!w3){ CHAINE.derniereErreur='web3.js indisponible (reseau ?)'; return null; }
+    const { PublicKey, Transaction, TransactionInstruction } = w3;
+    /* Une sauvegarde ancienne peut contenir une adresse base64 : on la repare
+       au lieu de laisser la transaction echouer. */
+    const adresse = normaliserAdresse(S.addressComplete, PublicKey);
+    if(!adresse){ CHAINE.derniereErreur='adresse du wallet illisible, reconnecte-toi'; return null; }
+    if(adresse!==S.addressComplete){
+      S.addressComplete=adresse;
+      S.address=adresse.slice(0,4)+'\u2026'+adresse.slice(-4);
+      save(); ui();
+      LOG.log('[SEEKER] adresse convertie en base58');
+    }
+    const joueur = new PublicKey(adresse);
+    /* Reconnexion d'abord, blockhash ensuite : voir amorcerWallet().
+       Si elle echoue sur une extension, inutile d'aller plus loin : le budget
+       du blockhash serait deja creve par la reconnexion que signerEtEnvoyer
+       tenterait ensuite. On rend la main tout de suite, sans appel RPC. */
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension.
+       `walletType` recoit `res.type` du connecteur, qui peut valoir 'phantom'
+       ou autre chose que 'ext' : un test sur cette valeur litterale rendait
+       ce garde muet, et le budget du blockhash repartait a 77 s. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
+      CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
+      return null;
+    }
+    /* La transaction va attendre la signature du joueur : on demande un
+       blockhash qui sera encore valide a ce moment-la. */
+    const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);
+    const tx = new Transaction({ feePayer: joueur, recentBlockhash: blockhash });
+    if(action==='seeker-task'){
+      /* Les 15 memos + le pourboire : une transaction, une signature. */
+      instructionsSeekerTask(w3, joueur).forEach(i=>tx.add(i));
+    } else {
+      /* Le blockhash est garde 40 s. Deux fois la meme action dans cette
+         fenetre produisaient une transaction identique bit pour bit, donc la
+         MEME signature : le reseau rejetait la seconde en « already
+         processed ». Le marqueur combine l'heure ET un compteur : deux
+         envois tombant dans la meme milliseconde restaient sinon identiques.
+         (instructionsSeekerTask a deja le sien via `lot`.) */
+      const texteMemo = 'seeker-strike:'+action+':'+marqueurUnique();
+      tx.add(new TransactionInstruction({
+        keys: [{ pubkey: joueur, isSigner: true, isWritable: false }],
+        programId: new PublicKey(CHAINE.memoProgram),
+        /* web3.js attend un Buffer ; un Uint8Array nu casse serialize()
+           sur certaines versions du polyfill. */
+        data: (typeof Buffer!=='undefined' && Buffer.from)
+                ? Buffer.from(texteMemo, 'utf8')
+                : new TextEncoder().encode(texteMemo)
+      }));
+    }
+
+    const sig = await signerEtEnvoyer(tx);
+    if(sig){
+      LOG.log('[SEEKER] TX '+action+' : '+sig);
+      if(!S.signatures) S.signatures=[];
+      S.signatures.unshift({ action, sig, t:Date.now() });
+      S.signatures=S.signatures.slice(0,20);
+    }
+    return sig||null;
+  }catch(e){
+    CHAINE.derniereErreur = causeLisible(e) || 'erreur inconnue';
+    /* Blockhash refuse par le reseau : le cache tient une valeur morte.
+       Sans cette purge, les 40 s suivantes echouaient toutes de la meme facon. */
+    if(/blockhash not found|block height exceeded/i.test(String((e&&(e.message||e))||''))) invaliderBlockhash();
+    LOG.warn('[SEEKER] transaction refusee ou echouee : '+CHAINE.derniereErreur
+             +' | brut : '+String((e&&(e.message||e))||''));
+    return null;
+  }finally{ CHAINE.enCours=false; }
+}
+
+/* ============================================================
+   CONNEXION WALLET — Multi-wallet : Seed Vault (MWA) + extensions
+   ============================================================ */
+const MWA_MODULE = 'https://esm.sh/@solana-mobile/mobile-wallet-adapter-protocol-web3js@2';
+/* Identite de l'app presentee au wallet. Le champ icon DOIT etre un chemin
+   relatif a uri : une URL absolue fait rejeter l'autorisation par le Seed Vault. */
+const IDENTITE = { name:'Seeker Strike', uri:(location.origin||'https://seeker-strike'), icon:'favicon.ico' };
+const MWA_CLUSTER = 'devnet';
+let _mwaMod=null, _mwaTried=false, _providerExt=null;
+function dbg(msg){ LOG.log('[SEEKER]', msg); }
+
+/* Android : le Seed Vault passe par MWA. Ailleurs : extensions navigateur. */
+function estAndroid(){ return /android/i.test(navigator.userAgent||''); }
+function contexteSecurise(){ return window.isSecureContext===true || location.protocol==='https:'; }
+/* Un navigateur integre a un wallet (Phantom, Backpack, Solflare) ne peut pas
+   ouvrir le Seed Vault : l'intent solana-wallet:// n'y sort jamais de l'app.
+   Il faut Chrome. On le detecte pour pouvoir le dire au joueur. */
+function navigateurIntegre(){
+  const ua = navigator.userAgent||'';
+  if(/Phantom|Backpack|Solflare/i.test(ua)) return true;
+  /* WebView Android (pas Chrome) + provider injecte = navigateur d'un wallet */
+  const wv = /; wv\)/i.test(ua) || (/Android/i.test(ua) && !/Chrome\/\d/i.test(ua));
+  return wv && !!(window.solana||window.phantom||window.backpack);
+}
+
+function detectWallets(){
+  const w=[];
+  const ext=[
+    ['phantom','Phantom','👻', ()=> (window.phantom&&window.phantom.solana&&window.phantom.solana.isPhantom)||(window.solana&&window.solana.isPhantom)],
+    ['backpack','Backpack','🎒', ()=> (window.backpack&&window.backpack.isBackpack)||(window.xnft&&window.xnft.solana)],
+    ['solflare','Solflare','🔥', ()=> window.solflare&&window.solflare.isSolflare],
+    ['glow','Glow','✨',            ()=> !!window.glowSolana]
+  ];
+  const trouves=ext.filter(([,,,test])=>{ try{ return !!test(); }catch(e){ return false; } })
+                   .map(([id,name,icon])=>({id,name,icon,type:'ext'}));
+  /* Correctif : Seed Vault en tete sur Android, en dernier ailleurs (il n'y marchera pas) */
+  const seedvault={ id:'seedvault', name:'Seed Vault', icon:'🔮', type:'mwa' };
+  return estAndroid() ? [seedvault, ...trouves] : [...trouves, seedvault];
+}
+function getProvider(id){
+  if(id==='phantom')  return (window.phantom&&window.phantom.solana)||window.solana;
+  if(id==='backpack') return window.backpack||(window.xnft&&window.xnft.solana);
+  if(id==='solflare') return window.solflare;
+  if(id==='glow')     return window.glowSolana;
+  return null;
+}
+
+/* Le Seed Vault renvoie l'adresse en base64 (encodage du protocole MWA),
+   alors que Solana manipule des cles en base58. Sans conversion, PublicKey
+   refusait l'adresse : "Non-base58 character". On accepte donc les trois
+   formes possibles selon le wallet et la version du protocole. */
+const RE_BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function normaliserAdresse(brut, PublicKey){
+  if(!brut) return null;
+  /* 1. deja un objet PublicKey de web3.js */
+  if(typeof brut.toBase58==='function') return brut.toBase58();
+  /* 2. octets bruts */
+  if((typeof Uint8Array!=='undefined' && brut instanceof Uint8Array) || Array.isArray(brut)){
+    try{ return new PublicKey(Uint8Array.from(brut)).toBase58(); }catch(e){ return null; }
+  }
+  if(typeof brut!=='string') return null;
+  /* 3. deja en base58 : rien a faire */
+  if(RE_BASE58.test(brut)) return brut;
+  /* 4. base64 ou base64url : on decode les 32 octets, on re-encode en base58 */
+  try{
+    const propre = brut.replace(/-/g,'+').replace(/_/g,'/');
+    const bin = atob(propre);
+    const octets = Uint8Array.from(bin, c=>c.charCodeAt(0));
+    if(octets.length===32) return new PublicKey(octets).toBase58();
+  }catch(e){}
+  return null;
+}
+/* Extrait l'adresse d'un compte MWA, quelle que soit la forme employee. */
+function adresseDuCompte(c, PublicKey){
+  if(!c) return null;
+  return normaliserAdresse(c.publicKey, PublicKey) || normaliserAdresse(c.address, PublicKey);
+}
+
+/* ---------- Seed Vault via MWA ---------- */
+async function initMWA(){
+  if(_mwaTried) return _mwaMod;
+  _mwaTried=true;
+  if(!contexteSecurise()){ dbg('HTTPS requis pour MWA'); return null; }
+  try{ dbg('import module MWA...'); _mwaMod=await import(/* @vite-ignore */ MWA_MODULE); dbg('module MWA charge'); }
+  catch(e){ dbg('echec import MWA : '+e.message); _mwaMod=null; }
+  return _mwaMod;
+}
+async function connectMWA(){
+  const mod=await initMWA();
+  if(!mod||!mod.transact){ dbg('transact indisponible'); return null; }
+  /* web3.js sert a convertir l'adresse base64 du Seed Vault en base58 */
+  const w3=await chargerWeb3();
+  const PublicKey = w3 && w3.PublicKey;
+  if(!PublicKey){ dbg('web3.js requis pour lire l\'adresse'); return null; }
+  const identity = IDENTITE;
+  try{
+    dbg('lancement transact...');
+    let address=null, jetonNeuf=null;
+    await mod.transact(async (wallet)=>{
+      /* Correctif : on retente d'abord avec le jeton memorise (pas de re-autorisation) */
+      const jeton=localStorage.getItem('ss_mwa_token');
+      let auth=null;
+      if(jeton){
+        try{ auth=await wallet.reauthorize({ auth_token:jeton, identity }); dbg('reauthorize OK'); }
+        catch(e){ dbg('reauthorize refuse, nouvelle autorisation'); localStorage.removeItem('ss_mwa_token'); }
+      }
+      if(!auth){
+        /* Correctif : on passe cluster ET chain, les deux existent selon la version */
+        auth=await wallet.authorize({ cluster:MWA_CLUSTER, chain:'solana:'+MWA_CLUSTER, identity });
+      }
+      dbg('auth OK, comptes='+((auth.accounts&&auth.accounts.length)||0));
+      if(auth.auth_token) jetonNeuf=auth.auth_token;
+      const c=auth.accounts&&auth.accounts[0];
+      if(c){
+        address=adresseDuCompte(c, PublicKey);
+        if(!address) dbg('adresse illisible : '+String(c.address||c.publicKey).slice(0,60));
+        else dbg('adresse normalisee : '+address.slice(0,6)+'...'+address.slice(-4));
+      }
+    });
+    if(jetonNeuf) localStorage.setItem('ss_mwa_token', jetonNeuf);
+    return address ? {success:true, address, type:'mwa'} : null;
+  }catch(e){ dbg('erreur MWA : '+e.message); return null; }
+}
+
+/* ---------- Extensions navigateur ---------- */
+async function connectExtension(id){
+  const provider=getProvider(id);
+  if(!provider){ dbg('provider '+id+' introuvable'); return null; }
+  try{
+    dbg('connexion '+id+'...');
+    let resp;
+    if(provider.connect) resp=await provider.connect();
+    else if(provider.request) resp=await provider.request({method:'connect'});
+    else { dbg('aucune methode connect sur '+id); return null; }
+    const pk=provider.publicKey||(resp&&resp.publicKey);
+    if(!pk){ dbg('pas de publicKey pour '+id); return null; }
+    const w3=await chargerWeb3();
+    const address = normaliserAdresse(pk, w3&&w3.PublicKey)
+                 || ((typeof pk.toBase58==='function')?pk.toBase58():String(pk));
+    if(!RE_BASE58.test(address)){ dbg('adresse invalide pour '+id+' : '+String(address).slice(0,20)); return null; }
+    _providerExt=provider;
+    return {success:true, address, type:'ext', provider};
+  }catch(e){ dbg('erreur '+id+' : '+e.message); return null; }
+}
+
+async function disconnectWallet(){
+  if(_providerExt){ try{ if(_providerExt.disconnect) await _providerExt.disconnect(); }catch(e){} _providerExt=null; }
+  localStorage.removeItem('ss_mwa_token');          /* Correctif : le jeton doit partir aussi */
+  S.connected=false; S.address=''; S.walletReel=false; S.addressComplete=''; S.soldeSkr=0;
+  S.walletType=''; S.walletId='';
+  toast('Déconnecté'); save(); ui();
+}
+
+/* ---------- Selecteur ---------- */
+function showWalletSelector(wallets, onSelect){
+  const old=document.getElementById('wallet-selector-overlay'); if(old) old.remove();
+  const overlay=document.createElement('div');
+  overlay.id='wallet-selector-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const box=document.createElement('div');
+  box.style.cssText='background:#0e0e1a;border:1px solid rgba(153,69,255,.4);border-radius:16px;padding:20px;width:100%;max-width:320px;';
+  const title=document.createElement('div');
+  title.textContent='Choisir un wallet';
+  title.style.cssText='font-family:Orbitron,sans-serif;font-size:1.1rem;font-weight:700;text-align:center;margin-bottom:16px;background:linear-gradient(90deg,#9945FF,#14F195);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;';
+  box.appendChild(title);
+  /* Bandeau d'etat : explique tout de suite si le contexte empeche le Seed Vault */
+  const etat=document.createElement('div');
+  const okAndroid=estAndroid(), okHttps=contexteSecurise(), dansWallet=navigateurIntegre();
+  if(!okAndroid || !okHttps || dansWallet){
+    etat.style.cssText='font-size:10px;line-height:1.5;color:#fca5a5;background:rgba(239,68,68,.12);'+
+      'border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:8px 10px;margin-bottom:12px;';
+    etat.innerHTML='Seed Vault indisponible ici :<br>'+
+      (okAndroid?'':'\u2022 Android requis<br>')+
+      (okHttps?'':'\u2022 HTTPS requis (page ouverte en '+location.protocol+')<br>')+
+      (dansWallet?'\u2022 tu es dans le navigateur d\'un wallet \u2014 ouvre le jeu dans <b>Chrome</b>':'');
+    box.appendChild(etat);
+  }
+  wallets.forEach(w=>{
+    const btn=document.createElement('button');
+    btn.style.cssText='width:100%;padding:14px 16px;margin-bottom:10px;border-radius:12px;border:1px solid rgba(153,69,255,.3);background:rgba(255,255,255,.06);color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:12px;';
+    const inutilisable = (w.type==='mwa') && (!estAndroid() || !contexteSecurise() || navigateurIntegre());
+    btn.innerHTML='<span style="font-size:1.3rem">'+w.icon+'</span><span>'+w.name+'</span>'+
+      (inutilisable?'<span style="margin-left:auto;font-size:10px;color:#777">indisponible</span>':'');
+    if(inutilisable){ btn.style.opacity='.45'; }
+    btn.onclick=()=>{ overlay.remove(); onSelect(w); };
+    box.appendChild(btn);
+  });
+  /* Plus de mode simulation : un wallet non connecte reste non connecte.
+     Un faux etat « connecte » induisait en erreur sur ce qui part on-chain. */
+  const fermer=document.createElement('button');
+  fermer.style.cssText='width:100%;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#8b8b9e;font-size:.85rem;cursor:pointer;margin-top:4px;';
+  fermer.textContent=T('Annuler');
+  fermer.onclick=()=>{ overlay.remove(); };
+  box.appendChild(fermer);
+  overlay.onclick=(e)=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+/* ---------- Bouton principal ---------- */
+async function toggleWallet(){
+  if(S.connected){ await disconnectWallet(); return; }
+  const wallets=detectWallets();
+  dbg('wallets detectes : '+wallets.map(w=>w.name).join(', '));
+
+  const tryConnect=async (wallet)=>{
+    toast('Connexion…');
+    let res=null;
+    if(wallet && wallet.type==='mwa')      res=await connectMWA();
+    else if(wallet && wallet.type==='ext') res=await connectExtension(wallet.id);
+
+    if(res && res.address){
+      S.connected=true; S.walletReel=true;
+      /* On retient le canal : _providerExt est une variable de page, elle
+         disparait au moindre rechargement alors que la sauvegarde, elle,
+         dit toujours « connecte ». Sans ca on repartait vers le Seed Vault
+         et on affichait un message de navigateur incoherent. */
+      S.walletType = res.type || (wallet && wallet.type) || 'ext';
+      S.walletId   = (wallet && wallet.id) || '';
+      S.address=res.address.slice(0,4)+'…'+res.address.slice(-4);
+      S.addressComplete=res.address;
+      toast('✅ '+wallet.name+' connecté • '+S.address, 3000);
+      /* Le solde SKR se lit sur la chaine, jamais devine. */
+      lireSoldeSKR().then(()=>{ save(); ui(); if(typeof renderShips==='function') renderShips(); });
+      if(!localStorage.getItem('ss35_first')){
+        S.skr+=600; localStorage.setItem('ss35_first','1');
+        setTimeout(()=>toast('\ud83c\udf81 '+T('Bonus de bienvenue')+' \u2022 +600 GC'), 1200);
+      }
+      save(); ui();
+    } else {
+      /* Echec : on reste franchement deconnecte. Le detail de la cause
+         a deja ete journalise par le canal de connexion. */
+      S.connected=false; S.walletReel=false; S.address=''; S.addressComplete=''; S.soldeSkr=0;
+      const cause = CHAINE.derniereErreur ? ' \u2022 '+T(String(CHAINE.derniereErreur)).slice(0,60) : '';
+      CHAINE.derniereErreur=null;
+      toast('\u274c '+T('Connexion échouée')+(wallet?' \u2014 '+wallet.name:'')+cause, 4200);
+      save(); ui();
+    }
+  };
+
+  showWalletSelector(wallets, tryConnect);
+}
+
+function checkStreak(){ const today=new Date().toDateString(); if(S.lastClaim && S.lastClaim!==today){ const y=new Date(); y.setDate(y.getDate()-1); if(S.lastClaim!==y.toDateString()) S.streak=0; } }
+function claimDaily(){ if(!S.connected) return toast('Connecte le Seed Vault'); const today=new Date().toDateString(); if(S.lastClaim===today) return toast('Déjà claim'); const y=new Date(); y.setDate(y.getDate()-1); S.streak = S.lastClaim===y.toDateString() ? S.streak+1 : 1; S.lastClaim=today; const gc=Math.round(90+S.streak*35); S.skr+=gc; toast(`🔥 Streak ${S.streak} • +${gc} GC`); save(); ui(); }
+/* Badge : distingue une vraie connexion Seed Vault d'une simulation */
+function majRecordInfini(){
+  const l=document.getElementById('ligne-infini'), v=document.getElementById('infini-record');
+  if(!l||!v) return;
+  if(S.infiniRecord>0){
+    l.style.display='flex';
+    v.textContent='vague '+S.infiniVague+'  \u2022  '+S.infiniRecord.toLocaleString();
+  } else l.style.display='none';
+}
+function majBadgeWallet(){
+  const el=document.getElementById('w-status'); if(!el) return;
+  if(!S.connected){ el.textContent='\ud83d\udd17 Connecter'; return; }
+  el.textContent = '\ud83d\udfe2 ' + (S.address||T('Connecté'));
+  el.title = T('Wallet connecté • devnet');
+}
+
+/* Compteur d'activite INTERNE. Ne signe rien, ne touche pas la blockchain.
+   Sert uniquement aux stats du joueur (achats, claims, missions). */
+function addTx(action){
+  S.txCount=(S.txCount||0)+1;
+  save(); ui();
+}
+
+/* ---------- SEEKER TASK : 15 transactions on-chain, declenchees a la main ----------
+   Une seule porte d'entree : le joueur appuie sur le bouton, une TX memo part,
+   il signe dans son wallet. Rien d'automatique, rien de cache. */
+function taskFaites(){ return S.txOnChain||0; }   /* uniquement des TX reelles */
+
+/* Seeker Task : les 15 transactions memo partent groupees, le joueur ne signe
+   qu'une fois. Relançable autant de fois qu'on veut, meme deja complete :
+   c'est ce qui alimente l'activite Solana du compte. Le bonus, lui, ne tombe
+   qu'a la premiere completion. */
+/* Delai minimal entre deux lots. Sans lui, un joueur qui enchaine les envois
+   depasse la limite du RPC public et ne recoit plus que des erreurs 429. */
+const DELAI_LOT = 20000;
+let _dernierLot = 0;
+function attenteLot(){
+  const reste = DELAI_LOT - (Date.now()-_dernierLot);
+  return reste>0 ? Math.ceil(reste/1000) : 0;
+}
+async function envoyerSeekerTask(){
+  if(!S.connected) return toast('Connecte ton wallet d\'abord');
+  if(CHAINE.enCours) return toast('Transaction en cours\u2026');
+  const attente = attenteLot();
+  if(attente) return toast('\u23f3 '+T('Patiente')+' '+attente+'s \u2014 '+T('le réseau devnet limite les envois'), 2800);
+  const rejoue = taskFaites()>=15;
+
+  if(!S.walletReel) return toast(T('Connecte un wallet pour envoyer des transactions'), 3000);
+
+  const cout = (TRESORERIE.actif && TRESORERIE.frais>0)
+    ? ' \u2022 '+TRESORERIE.frais+' SOL de soutien' : '';
+  toast('\u270d\ufe0f 15 TX en une signature'+cout+'\u2026', 3200);
+  majSeekerTask();                    /* le bouton passe en « signature en cours » */
+  const sig = await envoyerTxSeeker('seeker-task');
+  majSeekerTask();                    /* et revient a l'etat normal, succes ou echec */
+  if(!sig){
+    /* On affiche la vraie cause : sans elle le joueur ne peut rien corriger. */
+    const cause = CHAINE.derniereErreur ? ' \u2022 '+T(String(CHAINE.derniereErreur)).slice(0,70) : '';
+    CHAINE.derniereErreur=null;
+    return toast('\u274c '+T('TX échouée')+cause, 5000);
+  }
+  _dernierLot = Date.now();
+  S.txOnChain=15;
+  S.lotsTask=(S.lotsTask||0)+1;
+  creditTX(15);                     /* 15 memos confirmes = 15 TX on-chain */
+  Audio2.jouerSfx('button_click');
+  toast(rejoue ? '\u26d3\ufe0f 15 TX renvoyees \u2022 lot n\u00b0'+S.lotsTask
+               : '\u26d3\ufe0f 15 TX confirmees on-chain \u2022 une seule signature', 3000);
+  finTaskSiComplete(); save(); ui(); majSeekerTask();
+}
+
+function finTaskSiComplete(){
+  if(taskFaites()!==15) return;
+  if(S.taskRecompensee) return;      /* le bonus ne tombe qu'une fois */
+  S.taskRecompensee=true;
+  S.skr+=600;
+  toast('\ud83c\udf89 SEEKER TASK COMPLETE • +600 GC',3800);
+  Audio2.jouerSfx('levelup'); haptique('victoire');
+}
+
+let _tickLot=0;
+/* ---- Panneau « Serveur Solana » des reglages ----
+   Le RPC public est sature en permanence sur une IP mobile. Plutot que de
+   subir, on laisse le joueur coller son propre endpoint : il passe en tete
+   du pool et le probleme disparait. Un bouton de test fait un vrai appel. */
+function renderRpc(){
+  const c=document.getElementById('panneau-rpc'); if(!c) return;
+  const perso = txtSur(S.rpcPerso||'');
+  const actif = txtSur(CHAINE.rpc||'');
+  const morts = RPC_DEVNET.filter(u=>RPC_MORTS[u]).length;
+  c.innerHTML =
+    '<div class="danger-carte" style="border-color:#14F19533">'
+   +  '<div class="t"><span style="font-size:15px">&#128225;</span><b style="color:#14F195">'+T('Serveur Solana (RPC)')+'</b></div>'
+   +  '<p>'+T('Le serveur public est souvent saturé. Colle ton propre endpoint devnet (Helius, QuickNode, Alchemy — offre gratuite suffisante) : il sera utilisé en priorité.')+'</p>'
+   +  '<input id="rpc-perso" type="url" inputmode="url" autocomplete="off" spellcheck="false" '
+   +    'placeholder="https://devnet.helius-rpc.com/?api-key=..." value="'+perso+'" '
+   +    'style="width:100%;padding:9px 10px;border-radius:10px;background:#0c0c14;border:1px solid #2a2a3a;'
+   +    'color:#e5e7eb;font-size:10.5px;font-family:monospace;margin-bottom:8px">'
+   +  '<div style="display:flex;gap:6px">'
+   +    '<button onclick="testerRpc()" class="btn-dark" style="flex:1;padding:8px;border-radius:10px;font-size:10.5px;font-weight:700">'+T('TESTER')+'</button>'
+   +    '<button onclick="enregistrerRpc()" class="btn" style="flex:1;padding:8px;border-radius:10px;font-size:10.5px;font-weight:700;background:linear-gradient(135deg,#0891b2,#14F195)">'+T('ENREGISTRER')+'</button>'
+   +    (perso ? '<button onclick="oublierRpc()" class="btn-dark" style="padding:8px 10px;border-radius:10px;font-size:10.5px">'+T('EFFACER')+'</button>' : '')
+   +  '</div>'
+   +  '<div id="rpc-etat" style="font-size:9.5px;color:#7c7a8c;margin-top:8px;word-break:break-all">'
+   +    T('Serveur actif')+' : '+actif + (morts ? ' &bull; '+morts+' '+T('écarté(s)') : '')
+   +  '</div>'
+   + '</div>';
+}
+/* Enregistre l'endpoint : validation de forme, puis reconstruction du pool. */
+function enregistrerRpc(){
+  const el=document.getElementById('rpc-perso'); if(!el) return;
+  const v=String(el.value||'').trim();
+  if(v && !/^https:\/\/[^\s]+$/i.test(v)) return toast('\u274c '+T('Adresse invalide : elle doit commencer par https://'), 3200);
+  S.rpcPerso = v;
+  save();
+  reconstruirePool();
+  renderRpc();
+  toast(v ? '\u2705 '+T('Serveur enregistré') : T('Retour aux serveurs publics'), 2400);
+}
+function oublierRpc(){
+  S.rpcPerso=''; save(); reconstruirePool(); renderRpc();
+  toast(T('Retour aux serveurs publics'), 2200);
+}
+/* Test reel : on demande un blockhash a l'endpoint saisi et on chronometre.
+   C'est le seul moyen honnete de savoir si un RPC marche depuis CE reseau. */
+async function testerRpc(){
+  const el=document.getElementById('rpc-perso');
+  const etat=document.getElementById('rpc-etat');
+  const url = (el && String(el.value||'').trim()) || CHAINE.rpc;
+  if(etat) etat.innerHTML = T('Test en cours')+'\u2026';
+  const w3 = await chargerWeb3();
+  if(!w3){ if(etat) etat.innerHTML='\u274c '+T('web3.js indisponible'); return; }
+  const t0=Date.now();
+  try{
+    const co = new w3.Connection(url, 'confirmed');
+    const r  = await co.getLatestBlockhash();
+    const ms = Date.now()-t0;
+    if(etat) etat.innerHTML = '\u2705 '+T('Répond en')+' '+ms+' ms &bull; blockhash '+txtSur(String(r.blockhash).slice(0,8))+'\u2026';
+    LOG.log('[SEEKER] test RPC ok : '+url+' ('+ms+' ms)');
+  }catch(e){
+    if(etat) etat.innerHTML = '\u274c '+txtSur(T(causeLisible(e)));
+    LOG.warn('[SEEKER] test RPC echoue : '+url+' \u2014 '+(e&&e.message));
+  }
+}
+
+/* Met a jour la carte Seeker Task de l'accueil */
+function majSeekerTask(){
+  const f=taskFaites();
+  const c=document.getElementById('tx'); if(c) c.textContent=f;
+  const bar=document.getElementById('tx-bar'); if(bar) bar.style.width=Math.min(f/15*100,100)+'%';
+  const bd=document.getElementById('air-badge'); if(bd) bd.classList.toggle('hidden', f<15);
+  const b=document.getElementById('btn-task');
+  if(b){
+    /* Relançable meme complete : renvoyer un lot entretient l'activite du compte.
+       Trois etats a montrer, sinon le joueur ne sait pas ce qui se passe :
+       envoi en cours, delai anti-saturation, disponible. */
+    const att = attenteLot();
+    if(CHAINE.enCours){
+      b.disabled=true; b.style.opacity=0.55;
+      b.textContent = T('SIGNATURE EN COURS…');
+      clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask, 700);
+    } else {
+      b.disabled = att>0; b.style.opacity = att>0 ? 0.55 : 1;
+      b.textContent = att>0 ? (T('PATIENTE')+' '+att+'s')
+                            : ((f>=15) ? T('RELANCER LES 15 TX') : T('ENVOYER LES 15 TX'));
+      if(att>0){ clearTimeout(_tickLot); _tickLot=setTimeout(majSeekerTask,1000); }
+    }
+  }
+  const e=document.getElementById('task-etat');
+  if(e) e.textContent = S.walletReel ? T('Wallet connecté • devnet') : T('Wallet non connecté');
+}
+
+/* Applique la variante de carte choisie par le joueur */
+/* Bascule entre la campagne principale et CHAOS PROTOCOL */
+function basculerCampagne(){
+  if(!boucleDebloquee(4)) return toast('Terrasse le NEXUS pour ouvrir CHAOS PROTOCOL',2600);
+  S.carteActive = (S.carteActive===2) ? 1 : 2;
+  save(); appliquerCarte(); renderMap(); majBoutonCampagne();
+  Audio2.jouerSfx('button_click'); haptique('bouton');
+  toast(S.carteActive===2 ? '\u26a0\ufe0f CHAOS PROTOCOL' : 'GENESIS \u2014 campagne principale', 2200);
+}
+function majBoutonCampagne(){
+  const b=document.getElementById('btn-campagne'); if(!b) return;
+  const ouvert=boucleDebloquee(4);
+  b.style.display = ouvert ? 'block' : 'none';
+  b.innerHTML = (S.carteActive===2) ? 'GENESIS \u25c0' : 'CHAOS \u25b6';
+  b.style.borderColor = (S.carteActive===2) ? 'rgba(20,241,149,.5)' : 'rgba(244,114,182,.5)';
+  b.style.color = (S.carteActive===2) ? '#14F195' : '#f9a8d4';
+}
+/* Le fond de carte decoule de la campagne ouverte, il ne se choisit plus. */
+function appliquerCarte(){
+  const c=CARTES[S.carteActive===2?2:1]; if(!c) return;
+  const img=document.getElementById('map-bg');
+  if(img) img.src=c.img;
+}
+
+function renderMap(){
+  const carte = S.carteActive||1;
+  /* Positions de la campagne 2 : remontee plus resserree */
+  /* Cale sur le chemin de la carte CHAOS : six noeuds tombent pile sur les
+     anneaux lumineux du serpentin, le dernier au coeur de l'anomalie.
+     Coordonnees exprimees dans le cadrage visible (l'image est en cover). */
+  const POS2 = [
+    { top:'93%', left:'52%' },  // 13 Breche  - depart, entre les deux quais
+    { top:'82%', left:'74%' },  // 14 Comptoir - anneau violet
+    { top:'69%', left:'50%' },  // 15 Meute d'Elite - anneau vert
+    { top:'56%', left:'50%' },  // 16 FRACTURE - anneau violet
+    { top:'44%', left:'49%' },  // 17 Havre - anneau vert
+    { top:'34%', left:'48%' },  // 18 Signal Inconnu - anneau violet
+    { top:'24%', left:'48%' },  // 19 Coffre Genesis - dernier anneau
+    { top:'16%', left:'34%' },  // 20 Portail - seuil de l'anomalie
+    { top:'6%',  left:'50%' }   // 21 NEXUS PRIME - dans l'anomalie
+  ];
+  /* Chemin serpentant : 13 noeuds du QG (bas) au Nexus (haut) */
+  const positions = [
+    { top:'95%', left:'50%' },  // 0  QG Seeker
+    { top:'88%', left:'34%' },  // 1  Eveil
+    { top:'81%', left:'62%' },  // 2  Asteroides
+    { top:'74%', left:'38%' },  // 3  Perils
+    { top:'66%', left:'58%' },  // 4  VORTEX
+    { top:'58%', left:'32%' },  // 5  Nebuleuse
+    { top:'50%', left:'60%' },  // 6  Station Sigma
+    { top:'42%', left:'36%' },  // 7  CORRUPTION
+    { top:'34%', left:'56%' },  // 8  QG Terre
+    { top:'26%', left:'26%' },  // 9  Debris
+    { top:'25%', left:'66%' },  // 10 Redressement
+    { top:'16%', left:'46%' },  // 11 Point de rupture
+    { top:'7%',  left:'50%' }   // 12 NEXUS
+  ];
+  const box = document.getElementById('map-nodes-visual');
+  if(!box) return;
+  box.innerHTML = '';
+  majTerminalCarte();
+
+  const liste = NODES.filter(x => (x.carte||1)===carte);
+  liste.forEach((n, idx) => {
+    const done = S.completedNodes.includes(n.id);
+    const available = noeudAccessible(n);
+    const locked = !available && !done;
+    const pos = (carte===2 ? POS2[idx] : positions[idx]) || { top:'50%', left:'50%' };
+    const size = (n.id===12||n.id===21) ? 104 : (BOSS_DEFS[n.id] ? 90 : (n.type==='hub'||n.carte===2) ? 84 : 76);
+
+    const nodeEl = document.createElement('div');
+    nodeEl.style.cssText = `
+      position:absolute; top:${pos.top}; left:${pos.left};
+      width:${size}px; height:${size}px; transform:translate(-50%,-50%);
+      z-index:${30 - idx}; opacity:${locked ? 0.4 : 1};
+      filter:${locked ? 'grayscale(0.8)' : 'none'};
+      cursor:${(available || done) ? 'pointer' : 'default'};
+      transition:all .25s ease;`;
+
+    /* Vignettes de scene pour les noeuds 1 a 8, reutilisees au-dela */
+    const SLOT_NOEUD = {
+      1:'node1', 2:'node2', 3:'node3', 4:'node4', 5:'node5',
+      6:'node6', 7:'node7', 8:'node8', 9:'node2', 10:'node3', 11:'node6', 12:'node7',
+      13:'cxNdcombat', 14:'cxNdshop',  15:'cxNdelite', 16:'cxNdboss',  17:'cxNdrepos',
+      18:'cxNdmystere',19:'cxNdtresor',20:'cxNdportail',21:'cxNdboss'
+    };
+    const slotImg = SLOT_NOEUD[n.id] ? ASSETS[SLOT_NOEUD[n.id]] : null;
+    const imgSrc = slotImg ? slotImg.src : (NODE_IMGS[Math.min(n.id + 1, 8)] || NODE_IMGS[1]);
+    const statusIcon = done ? ico('nodeDone','\u2705',20)
+                     : available ? ico('nodePlay','\u25b6\ufe0f',20)
+                     : ico('nodeLock','\ud83d\udd12',20);
+    const glow = done
+      ? 'drop-shadow(0 0 10px #14F195)'
+      : available
+        ? 'drop-shadow(0 0 14px #9945FF) drop-shadow(0 0 4px #14F195)'
+        : 'none';
+
+    nodeEl.innerHTML = `
+      <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;inset:-6px;border-radius:50%;background:radial-gradient(circle,rgba(153,69,255,0.25) 0%,transparent 70%);pointer-events:none;"></div>
+        <img src="${imgSrc}" alt="${n.title}"
+          style="width:100%;height:100%;object-fit:contain;filter:${glow};${available && !done ? 'animation:pulse 2s infinite;' : ''}"/>
+        <div style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);
+          font-size:9px;font-weight:700;white-space:nowrap;padding:2px 6px;border-radius:8px;
+          background:rgba(0,0,0,0.75);color:#fff;border:1px solid rgba(153,69,255,0.4);">
+          ${statusIcon} ${n.title.split(' ')[0]}
+        </div>
+      </div>`;
+
+    /* Un noeud complete reste rejouable */
+    const verrou = noeudVerrouille(n.id);
+    if (verrou && !done){
+      /* Secteur sous cle : il reste cliquable pour expliquer ce qui manque */
+      nodeEl.style.cursor='pointer';
+      nodeEl.style.opacity='0.55';
+      nodeEl.onclick = () => {
+        const cid=Object.keys(CLES).find(k=>CLES[k]===verrou);
+        toast('\ud83d\udd12 '+verrou.nom+' requise \u2022 '+fragments(cid)+'/3 fragments',3600);
+        Audio2.jouerSfx('button_click'); haptique('bouton');
+      };
+      const cad=document.createElement('div');
+      cad.textContent='\ud83d\udd12';
+      cad.style.cssText='position:absolute;top:-10px;right:-6px;font-size:15px;z-index:6;'+
+        'filter:drop-shadow(0 0 5px #000)';
+      nodeEl.appendChild(cad);
+    }
+    else if (available || done) nodeEl.onclick = () => toucherNoeud(n.id);
+
+    /* Etoiles : meilleure difficulte reussie */
+    const et=(S.nodeStars&&S.nodeStars[n.id])||0;
+    if(et>0){
+      const badge=document.createElement('div');
+      badge.style.cssText='position:absolute;top:-12px;left:50%;transform:translateX(-50%);'+
+        'font-size:10px;letter-spacing:1px;white-space:nowrap;text-shadow:0 0 6px #000;z-index:5;'+
+        'color:'+(et>=3?'#f87171':et===2?'#fbbf24':'#86efac');
+      badge.textContent='\u2605'.repeat(et);
+      /* Un noeud sans enfant ferait planter tout le rendu de la carte */
+      const hote=nodeEl.firstElementChild||nodeEl;
+      hote.appendChild(badge);
+    }
+    box.appendChild(nodeEl);
+  });
+}
+/* ============================================================
+   NOEUDS SPECIAUX DE CHAOS PROTOCOL
+   Marchand, repos, mystere, tresor, portail : chacun a un effet reel.
+   ============================================================ */
+const EVENEMENTS_MYSTERE = [
+  {nom:'Cache d\u2019armes',    txt:"Un d\u00e9p\u00f4t oubli\u00e9. Deux charges r\u00e9cup\u00e9r\u00e9es.",
+   effet:()=>{ S.charges.mitra=(S.charges.mitra||0)+1; S.charges.nuke=(S.charges.nuke||0)+1; }, bon:true},
+  {nom:'\u00c9pave marchande', txt:"Les soutes sont intactes. +300 GC.",
+   effet:()=>{ S.skr+=300; }, bon:true},
+  {nom:'Relique Genesis', txt:"Un artefact ancien. Ta coque s\u2019en trouve renforc\u00e9e d\u00e9finitivement.",
+   effet:()=>{ S.bonusVies=Math.min(3,(S.bonusVies||0)+1); }, bon:true},
+  {nom:'Signal parasite', txt:"Tes syst\u00e8mes sont br\u00fdit\u00e9s. D\u00e9g\u00e2ts r\u00e9duits sur le prochain secteur.",
+   effet:()=>{ S.consommables={...(S.consommables||{}), degats:0.75}; }, bon:false},
+  {nom:'Embuscade',       txt:"C\u2019\u00e9tait un pi\u00e8ge. Le prochain secteur sera plus dense.",
+   effet:()=>{ S.consommables={...(S.consommables||{}), embuscade:true}; }, bon:false},
+  {nom:'Silence radio',   txt:"Rien. Le signal s\u2019est \u00e9teint avant que tu n\u2019arrives.",
+   effet:()=>{}, bon:true}
+];
+
+/* Boutique de secteur : 3 articles tir\u00e9s au sort, 40 % moins chers */
+function ouvrirComptoir(nodeId){
+  const tous=articlesShop().reduce((t,r)=>t.concat(r.items),[])
+    .filter(i=>!(i.unique && S.unlockedMun.includes(i.unique)));
+  const lot=[]; const copie=[...tous];
+  for(let i=0;i<3 && copie.length;i++) lot.push(copie.splice(Math.floor(Math.random()*copie.length),1)[0]);
+  ouvrirPanneauNoeud('cxNdshop','COMPTOIR', '#c4b5fd',
+    "Un marchand a surv\u00e9cu ici. Trois articles, 40 % de r\u00e9duction.",
+    lot.map(i=>{
+      const prix=Math.round(i.skr*0.6);
+      return '<button onclick="acheterComptoir(\''+i.id+'\','+prix+')" class="glass rounded-xl w-full flex justify-between items-center" style="padding:12px 14px;margin-bottom:9px">'+
+        '<span class="text-[12px] font-semibold">'+i.name+'</span>'+
+        '<span class="text-[11px] font-bold" style="color:'+(S.skr>=prix?'#14F195':'#6b7280')+'">'+prix+' GC</span></button>';
+    }).join(''),
+    'CONTINUER', ()=>{ validerNoeudSpecial(nodeId); });
+}
+function acheterComptoir(id,prix){
+  if(S.skr<prix) return toast('Cr\u00e9dits insuffisants');
+  S.skr-=prix;
+  const it=articlesShop().reduce((t,r)=>t.concat(r.items),[]).find(x=>x.id===id);
+  const sauve=it.skr; it.skr=0;
+  buy(id);                       /* applique l'effet sans redebiter */
+  it.skr=sauve; S.skr+=0;
+  save(); ui();
+}
+
+/* Havre : soin complet et recharge */
+function ouvrirHavre(nodeId){
+  ouvrirPanneauNoeud('cxNdrepos','HAVRE', '#86efac',
+    "Une poche de calme dans le chaos. Tes syst\u00e8mes se r\u00e9tablissent.",
+    '<div class="text-[12px] leading-relaxed" style="color:#c9c6d6">'+
+    '\u2022 <b>+3 vies</b> sur ton prochain secteur<br>'+
+    '\u2022 Charges de bonus <b>enti\u00e8rement recharg\u00e9es</b><br>'+
+    '\u2022 <b>+150 GC</b> de ravitaillement</div>',
+    'SE REPOSER', ()=>{
+      S.consommables={...(S.consommables||{}), vies:3};
+      S.charges={mitra:2, nuke:1, ghost:1};
+      S.skr+=150; save(); ui();
+      Audio2.jouerSfx('levelup'); haptique('victoire');
+      toast('\ud83d\udee0\ufe0f Syst\u00e8mes r\u00e9tablis',2200);
+      validerNoeudSpecial(nodeId);
+    });
+}
+
+/* Signal inconnu : un tirage parmi six */
+function ouvrirMystere(nodeId){
+  const e=EVENEMENTS_MYSTERE[Math.floor(Math.random()*EVENEMENTS_MYSTERE.length)];
+  ouvrirPanneauNoeud('cxNdmystere','SIGNAL INCONNU', '#a78bfa',
+    "Une \u00e9mission non r\u00e9pertori\u00e9e. Impossible de savoir ce qu\u2019elle cache.",
+    '<div class="text-[12px] text-gray-500">R\u00e9sultat r\u00e9v\u00e9l\u00e9 apr\u00e8s ouverture.</div>',
+    'OUVRIR LE SIGNAL', ()=>{
+      e.effet(); save(); ui();
+      Audio2.jouerSfx(e.bon?'levelup':'hit'); haptique(e.bon?'victoire':'degat');
+      afficherTransmission(e.bon?'GENESIS':'ALERTE', e.nom+'\n\n'+e.txt,
+        ()=>validerNoeudSpecial(nodeId), e.bon?'#14F195':'#f87171');
+    });
+}
+
+/* Panneau generique pour les noeuds sans combat */
+function ouvrirPanneauNoeud(slot, titre, couleur, intro, corps, libelle, action){
+  const anc=document.getElementById('panneau-noeud'); if(anc) anc.remove();
+  const img=ASSETS[slot];
+  const ov=document.createElement('div');
+  ov.id='panneau-noeud';
+  ov.style.cssText='position:fixed;inset:0;z-index:470;background:rgba(3,3,10,.94);display:flex;'+
+    'align-items:center;justify-content:center;padding:22px';
+  ov.innerHTML='<div class="glass rounded-3xl" style="max-width:340px;width:100%;padding:22px 20px;border-color:'+couleur+'55">'+
+    (img?'<div style="display:flex;justify-content:center;margin-bottom:14px"><img src="'+img.src+'" style="width:74px;height:74px;object-fit:contain"/></div>':'')+
+    '<div class="font-o font-bold text-center" style="color:'+couleur+';letter-spacing:2px;font-size:13px">'+titre+'</div>'+
+    '<div class="text-[11.5px] text-center mt-2 mb-4" style="color:#9ca3af;line-height:1.6">'+intro+'</div>'+
+    corps+
+    '<button id="pn-ok" class="btn w-full py-3 rounded-xl font-bold text-sm mt-3">'+libelle+'</button></div>';
+  document.body.appendChild(ov);
+  document.getElementById('pn-ok').onclick=()=>{ ov.remove(); if(action) action(); };
+}
+
+/* Un noeud sans combat est valide directement */
+function validerNoeudSpecial(nodeId){
+  if(!S.completedNodes.includes(nodeId)){ S.completedNodes.push(nodeId); }
+  save(); show('map'); renderMap();
+  toast('Secteur travers\u00e9',1600);
+}
+
+function openPrep(nodeId){
+  if(!S.connected) return toast('Connecte le Seed Vault');
+  const nd=NODES.find(x=>x.id===nodeId);
+  /* Les secteurs sans combat ouvrent leur propre panneau */
+  if(nd && nd.type==='marchand'){ S.currentNode=nodeId; return ouvrirComptoir(nodeId); }
+  if(nd && nd.type==='repos'){    S.currentNode=nodeId; return ouvrirHavre(nodeId); }
+  if(nd && nd.type==='mystere'){  S.currentNode=nodeId; return ouvrirMystere(nodeId); }
+  S.currentNode=nodeId; loadout.difficulte=loadout.difficulte||'normal'; const node=NODES.find(n=>n.id===nodeId); document.getElementById('prep-title').textContent=T(node.title); document.getElementById('prep-brief').textContent=T(node.brief);
+  afficherContrat(nodeId);
+  afficherPortraitBoss(nodeId);
+  afficherChoixDifficulte(nodeId);
+  chargerFondNiveau(nodeId);            /* precharge pendant que le joueur choisit son loadout */ loadout.mode='pilote'; loadout.ship=S.ship; loadout.munition='std'; loadout.bonus=null; renderPrep(); show('prep'); }
+/* --- Selecteur de difficulte sur l'ecran de preparation --- */
+function afficherChoixDifficulte(nodeId){
+  const zone=document.getElementById('prep-brief'); if(!zone) return;
+  const anc=document.getElementById('choix-diff'); if(anc) anc.remove();
+  const best=(S.nodeStars&&S.nodeStars[nodeId])||0;
+  const el=document.createElement('div');
+  el.id='choix-diff'; el.className='mb-3';
+  el.innerHTML='<div class="text-[10px] text-gray-500 mb-1.5 font-semibold">DIFFICULT\u00c9'+
+    (best?' \u2022 record : '+'\u2605'.repeat(best):'')+'</div><div class="seg-diff grid grid-cols-3 gap-2"></div>';
+  const g=el.querySelector('.seg-diff');
+  Object.values(DIFFICULTES).forEach(d=>{
+    const b=document.createElement('button');
+    b.className='glass rounded-xl p-2 text-center'+(loadout.difficulte===d.id?' ring-2 ring-green-400':'');
+    b.onclick=()=>{ loadout.difficulte=d.id;
+      afficherChoixDifficulte(nodeId);
+      afficherContrat(nodeId);   /* l'objectif et la prime suivent le cran choisi */
+    };
+    b.innerHTML='<div class="text-[11px] font-bold" style="color:'+d.couleur+'">'+'\u2605'.repeat(d.etoiles)+'</div>'+
+                '<div class="text-[10px]">'+d.nom+'</div>'+
+                '<div class="text-[9px] text-gray-500">x'+d.reward+'</div>';
+    g.appendChild(b);
+  });
+  zone.parentNode.insertBefore(el, zone.nextSibling);
+}
+
+/* Carte du contrat, posee en tete du briefing */
+function afficherContrat(nodeId){
+  const zone=document.getElementById('prep-brief'); if(!zone) return;
+  const anc=document.getElementById('carte-contrat'); if(anc) anc.remove();
+  const c=contratDuNoeud(nodeId); if(!c) return;
+  /* chaque difficulte a sa propre recompense : on affiche l'etat du cran choisi */
+  const dejaFait=(S.contratsRemplis||[]).includes(nodeId+':'+(loadout.difficulte||'normal'));
+  const el=document.createElement('div');
+  el.id='carte-contrat';
+  el.className='rounded-2xl mb-3';
+  el.style.cssText='padding:13px 15px;border:1px solid '+(dejaFait?'rgba(20,241,149,.42)':'rgba(251,191,36,.38)')+
+    ';background:linear-gradient(180deg,'+(dejaFait?'rgba(6,40,28,.5)':'rgba(44,33,7,.5)')+',rgba(14,11,24,.35))';
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;gap:9px">'+
+      '<span style="font-size:14px">'+(dejaFait?'✓':'◎')+'</span>'+
+      '<span style="font-family:Orbitron,sans-serif;font-size:9.5px;letter-spacing:2px;color:'+
+        (dejaFait?'#14F195':'#fbbf24')+'">CONTRAT • '+c.def.nom+'</span>'+
+      '<span style="margin-left:auto;font-size:10.5px;font-weight:700;color:'+
+        (dejaFait?'#6b7280':'#fbbf24')+'">+'+c.gc+' GC</span>'+
+    '</div>'+
+    '<div style="font-size:11.5px;color:#c9c6d6;margin-top:6px;line-height:1.5">'+
+      c.def.texte(c.valeur)+'</div>'+
+    (dejaFait?'<div style="font-size:9.5px;color:#6b7280;margin-top:4px">D&eacute;j&agrave; rempli — la r&eacute;compense reste acquise une seule fois.</div>':'');
+  zone.parentNode.insertBefore(el, zone);
+}
+
+/* Portrait statique du boss sur l'ecran de preparation (pas de rotation) */
+function afficherPortraitBoss(nodeId){
+  const zone=document.getElementById('prep-brief'); if(!zone) return;
+  const anc=document.getElementById('boss-portrait'); if(anc) anc.remove();
+  const def=BOSS_DEFS[nodeId]; if(!def) return;
+  const FICH={vortex:'boss_vortex_face', sentinelle:'boss_sentinelle', dragon:'boss_dragon'};
+  const el=document.createElement('div');
+  el.id='boss-portrait';
+  el.className='glass rounded-2xl p-3 mb-3 flex items-center gap-3';
+  el.style.borderColor=def.couleur+'66';
+  el.innerHTML=`
+    <img src="${(ASSETS[def.sprite]&&ASSETS[def.sprite].src)||''}" alt="${def.nom}"
+         onerror="this.style.display='none'"
+         style="width:74px;height:74px;object-fit:contain;filter:drop-shadow(0 0 12px ${def.couleur})"/>
+    <div>
+      <div class="text-[9px] text-red-400 font-bold tracking-wider">\u26a0 BOSS D\u00c9TECT\u00c9</div>
+      <div class="font-o font-bold text-sm" style="color:${def.couleur}">${def.nom}</div>
+      <div class="text-[10px] text-gray-400">PV \u00d7${def.hpMult}${def.phase2?' \u2022 2 phases':''}${def.invoque?' \u2022 invocations':''}</div>
+    </div>`;
+  zone.parentNode.insertBefore(el, zone);
+}
+
+function renderPrep(){
+  document.getElementById('mode-grid').innerHTML=MODES.map(m=>`<button onclick="setMode('${m.id}')" class="glass rounded-xl p-2.5 text-left ${loadout.mode===m.id?'ring-2 ring-green-400':''}"><div class="font-semibold text-xs" style="color:${m.color}">${m.name}</div><div class="text-[9px] text-gray-500 flex items-center gap-1"><img class="ico-stat" src="${ICO.health}"/>${m.lives} <img class="ico-stat" src="${ICO.damage}"/>x${m.reward.toFixed(1)}</div></button>`).join('');
+  document.getElementById('prep-ships').innerHTML=S.unlocked.map(id=>{ const sh=SHIPS[id]; return `<button onclick="setShip(${id})" class="glass rounded-xl p-2.5 min-w-[72px] text-center ${loadout.ship===id?'ring-2 ring-green-400':''}"><div>${ico('ship'+id, sh.emoji, 34)}</div><div class="text-[9px] mt-0.5">${sh.name}</div></button>`; }).join('');
+  document.getElementById('prep-munitions').innerHTML=MUNITIONS.map(m=>{ const unlocked=S.unlockedMun.includes(m.id);
+    const stats=`<span class="text-[9px] text-gray-500 flex items-center gap-1 mt-0.5"><img class="ico-stat" src="${ICO.damage}"/>x${m.dmg} <img class="ico-stat" src="${ICO.speed}"/>x${m.rate}</span>`; return `<button onclick="${unlocked?`setMun('${m.id}')`:'toast(\'Munition verrouillée\')'}" class="glass rounded-xl p-2.5 text-left ${loadout.munition===m.id?'ring-2 ring-green-400':''} ${!unlocked?'opacity-40':''}"><div class="font-semibold text-xs">${m.name}</div>${stats}</button>`; }).join('');
+  /* Icones dessinees plutot qu'emojis : meme langage visuel que le reste du jeu. */
+  /* On annonce le plafond avant de partir : le decouvrir en plein combat
+     serait une mauvaise surprise. */
+  const capBox=document.getElementById('prep-cap-boosts');
+  if(capBox){
+    const r=BOOSTS_REGLAGE[loadout.difficulte]||BOOSTS_REGLAGE.normal;
+    /* En Extreme il n'y a aucune recharge par les kills : on l'annonce
+       clairement plutot que d'afficher un seuil qui ne sert jamais. */
+    capBox.textContent = (r.recharges===0)
+      ? T('Boosts : 1 de chaque · aucune recharge, sauf boss terrassé')
+      : T('Boosts : 1 de chaque · recharge tous les {0} ennemis', r.seuil)
+        + (r.recharges===1 ? ' \u00b7 '+T('1 seule fois') : '');
+  }
+  document.getElementById('prep-bonuses').innerHTML=BONUSES.map(b=>{
+    const charges=S.charges[b.chargesKey]||0;
+    const selected=loadout.bonus===b.id;
+    return `<button onclick="setBonus('${b.id}')" class="glass rounded-xl p-3 w-full text-left flex justify-between items-center gap-3 ${selected?'ring-2 ring-green-400':''} ${charges<=0?'opacity-40':''}">`+
+      `<span style="width:30px;height:30px;flex:none;display:flex;align-items:center;justify-content:center">${ico(b.slot,b.emoji,28)}</span>`+
+      `<div style="flex:1;min-width:0"><div class="font-semibold text-xs">${T(b.name)}</div>`+
+      `<div class="text-[9px] text-gray-500">${T(b.desc)}</div></div>`+
+      `<div class="text-xs font-bold">${charges}</div></button>`;
+  }).join('');
+}
+function setMode(id){ loadout.mode=id; renderPrep(); }
+function setShip(id){ loadout.ship=id; S.ship=id; renderPrep(); }
+function setMun(id){ loadout.munition=id; renderPrep(); }
+function setBonus(id){ if((S.charges[BONUSES.find(b=>b.id===id).chargesKey]||0)<=0) return toast('Plus de charges'); loadout.bonus = loadout.bonus===id ? null : id; renderPrep(); }
+
+function launchMission(){
+  const base=MODES.find(m=>m.id===loadout.mode);
+  const diff=DIFFICULTES[loadout.difficulte]||DIFFICULTES.normal;
+  /* La difficulte multiplie PV ennemis, cadence de tir et recompenses */
+  const mode={...base, hp:base.hp*diff.hp, reward:base.reward*diff.reward, cadence:diff.cadence, diffId:diff.id,
+              flux:diff.flux, vitesse:diff.vitesse, bonusUnites:diff.bonusUnites};
+  const nd=NODES.find(x=>x.id===S.currentNode);
+  if(nd && nd.type==='tresor')  mode.multDropsNoeud=2.6;   /* Coffre : butin garanti */
+  if(nd && nd.type==='portail'){
+    /* Un portail garde par un boss ne cumule pas les deux surcouts :
+       le boss fournit deja toute la pression. */
+    if(!BOSS_DEFS[nd.id]) mode.hp*=1.35;
+    mode.spawn*=0.7; mode.reward*=1.8;
+  }
+  if(S.consommables && S.consommables.embuscade){ mode.spawn*=0.6; delete S.consommables.embuscade; save(); }
+  const mun=MUNITIONS.find(m=>m.id===loadout.munition); show('solo'); document.getElementById('hud-title').textContent=NODES.find(n=>n.id===S.currentNode).title; document.getElementById('hud-mode').textContent=mode.name;
+  chargerFondNiveau(S.currentNode).then(appliquerFondNiveau);   /* decor du noeud, avec fondu */
+  const tr=TRANSMISSIONS[S.currentNode];
+  const lancer=()=>initGame(mode, mun);
+  if(tr && !(S.trVues||[]).includes(S.currentNode)){
+    S.trVues=(S.trVues||[]).concat(S.currentNode); save();
+    afficherTransmission(T(tr.de), T(tr.txt), lancer, tr.de==='ALERTE'?'#f87171':tr.de==='NEXUS'?'#e879f9':'#14F195');
+  } else lancer(); }
+function abortMission(){ if(G&&G.running){ G.running=false; cancelAnimationFrame(G.raf); stopMusic(); } show('map'); }
+
+/* Carton de chapitre a l'entree d'un secteur */
+function afficherTitreSecteur(){
+  const nd=NODES.find(x=>x.id===S.currentNode);
+  const ecran=document.getElementById('s-solo'); if(!ecran) return;
+  const anc=document.getElementById('titre-secteur'); if(anc) anc.remove();
+  const el=document.createElement('div');
+  el.id='titre-secteur';
+  const num = S.currentNode>=0 ? ('SECTEUR '+String(S.currentNode).padStart(2,'0')) : 'MODE INFINI';
+  const nom = nd ? nd.title : 'ZONE INCONNUE';
+  const b = nd && BOUCLES[nd.boucle] ? BOUCLES[nd.boucle] : null;
+  el.innerHTML='<div class="num" style="color:'+(b?b.couleur:'#14F195')+'">'+num+(b?' \u2022 '+b.nom:'')+'</div>'+
+               '<div class="nom">'+nom.toUpperCase()+'</div><div class="trait"></div>';
+  ecran.appendChild(el);
+  setTimeout(()=>{ el.classList.add('sortie'); setTimeout(()=>el.remove(),700); }, 2100);
+}
+
+function initGame(mode, mun){
+  const canvas=document.getElementById('gc');
+  const ctx=canvas.getContext('2d');
+  const dpr=Math.min(devicePixelRatio||1,3);
+  const w=window.innerWidth, h=window.innerHeight;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  /* Le Seeker affiche en 3x : rester a 2x revenait a etirer toute la scene.
+     Interpolation soignee pour les sprites agrandis. */
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality='high';
+
+  G={
+    ctx,w,h, mode, mun, running:true,
+    player:{x:w/2, y:h-Math.max(100,PLANCHER_VOL+20), r:22},
+     touchY:null,
+    bullets:[], eBullets:[], enemies:[], particles:[], orbs:[], explosions:[],
+     boss:null, bossWarn:0, bossTimer:0, mortBoss:null, event:null, arena:null, chrono:0, arenaReussi:false, wing:null, killsJoueur:0, cooldownBonus:0, companions:null, coop:false,
+    score:0, frags:0, kills:0,
+     lives:mode.lives+(S.bonusVies||0)+((S.consommables&&S.consommables.vies)||0),
+     multDrops:((S.consommables&&S.consommables.drops)||1)*(mode.multDropsNoeud||1),
+     rareteButin:(RARETE_DIFFICULTE[loadout.difficulte]||1), viesLarguees:0,
+     boostsUtilises:{}, boostsRecharges:0, boostsBonus:0,
+     multDegats:(S.consommables&&S.consommables.degats)||1,
+    wave:1, combo:1, comboTimer:0,
+    lastShot:0, spawnT:0, waveT:0, frame:0,
+    touchX:null, shake:0,
+    power:{shield:0, rapid:0, perce:0}, invuln:0, noyaux:0, bonusTimer:0, bonusUsed:false,
+    shipBonus:SHIPS[loadout.ship].bonus, bossSpawned:false,
+     meca:(NODES.find(x=>x.id===S.currentNode)||{}).meca||null,   /* brouillard / inversion / zeroG / marathon */
+     contrat:(mode.infini||mode.arena||mode.coop)?null:contratDuNoeud(S.currentNode),
+     objectifVagues:(mode.infini||mode.arena||mode.coop)?null:vaguesRequises(S.currentNode),
+     termine:false, plusDeSpawn:false,
+     vx:0, vy:0
+  };
+
+  majBarreBonus();     /* les 3 bonus sont visibles des le depart */
+
+  const c=canvas;
+  /* Suivi tactile libre : X ET Y (mouvement 360) */
+  c.ontouchstart=e=>{e.preventDefault(); const r=c.getBoundingClientRect(); G.touchX=e.touches[0].clientX-r.left; G.touchY=e.touches[0].clientY-r.top;};
+  c.ontouchmove=e=>{e.preventDefault(); const r=c.getBoundingClientRect(); G.touchX=e.touches[0].clientX-r.left; G.touchY=e.touches[0].clientY-r.top;};
+  c.ontouchend=()=>{G.touchX=null; G.touchY=null;};
+  c.onmousedown=e=>{const r=c.getBoundingClientRect(); G.touchX=e.clientX-r.left; G.touchY=e.clientY-r.top;};
+  c.onmousemove=e=>{if(G.touchX!==null){const r=c.getBoundingClientRect(); G.touchX=e.clientX-r.left; G.touchY=e.clientY-r.top;}};
+  c.onmouseup=()=>{G.touchX=null; G.touchY=null;};
+
+  afficherTitreSecteur();
+  installerClavier();
+  /* Les consommables ne valent que pour la mission qui commence */
+  if(S.consommables && Object.keys(S.consommables).length){
+    const c=[];
+    if(S.consommables.vies)   c.push('+'+S.consommables.vies+' vies');
+    if(S.consommables.drops)  c.push('drops \u00d7'+S.consommables.drops);
+    if(S.consommables.degats) c.push('d\u00e9g\u00e2ts \u00d7'+S.consommables.degats);
+    if(c.length) toast('\ud83d\udee0\ufe0f '+c.join(' \u2022 '),2600);
+    S.consommables={}; save();
+  }
+  startMusic();
+  loop();
+}
+
+/* --- Clavier 8 directions : ZQSD, WASD et fleches --- */
+let clavierInstalle=false;
+const TOUCHES={};
+function installerClavier(){
+  if(clavierInstalle) return; clavierInstalle=true;
+  document.addEventListener('keydown', e=>{
+    TOUCHES[e.key.toLowerCase()]=true;
+    if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
+  });
+  document.addEventListener('keyup', e=>{ TOUCHES[e.key.toLowerCase()]=false; });
+  /* Echap ou P : pause / reprise */
+  document.addEventListener('keydown', e=>{
+    const k=(e.key||'').toLowerCase();
+    if(k==='escape'||k==='p'){ e.preventDefault(); if(G&&(G.running||_enPause)) basculerPause(); }
+  });
+  window.addEventListener('blur', ()=>{ for(const k in TOUCHES) TOUCHES[k]=false; });
+}
+/* Vecteur de direction clavier, normalise en diagonale */
+function directionClavier(){
+  let dx=0, dy=0;
+  if(TOUCHES['q']||TOUCHES['a']||TOUCHES['arrowleft'])  dx-=1;
+  if(TOUCHES['d']||TOUCHES['arrowright'])               dx+=1;
+  if(TOUCHES['z']||TOUCHES['w']||TOUCHES['arrowup'])    dy-=1;
+  if(TOUCHES['s']||TOUCHES['arrowdown'])                dy+=1;
+  if(dx&&dy){ const k=Math.SQRT1_2; dx*=k; dy*=k; }      /* diagonale : meme vitesse */
+  return {dx,dy};
+}
+
+/* Chaque bonus est utilisable en pleine partie, tant qu'il reste des charges */
+/* ============================================================
+   PLAFOND DE BOOSTS PAR MISSION
+   Le stock de charges s'accumule sans limite dans la boutique. Sans
+   plafond, on en achete vingt au premier secteur et plus rien ne
+   resiste. On limite donc ce qu'on peut DEPENSER dans une mission,
+   selon l'avancement dans la campagne et la difficulte choisie.
+   Le stock, lui, n'est jamais confisque : il ressert plus loin.
+   ============================================================ */
+/* ============================================================
+   BOOSTS : UNE CHARGE DE CHAQUE, QUI SE REGAGNE EN JOUANT
+   Le plafond global precedent etait une erreur : avec une seule
+   activation autorisee, on choisissait un boost et les deux autres
+   ne servaient jamais. Desormais chaque type a son propre compteur,
+   et abattre des ennemis en redonne. Le stock de la boutique reste
+   la limite haute : on ne peut pas depenser ce qu'on n'a pas.
+   ============================================================ */
+/* Tout le reglage tient ici : une charge de chaque au depart, puis des
+   recharges gagnees en abattant des ennemis. Le seuil monte avec la
+   difficulte, sinon l'Extreme — qui envoie 44% d'ennemis en plus —
+   rechargerait plus souvent. C'est le travers deja corrige sur le butin. */
+const BOOSTS_REGLAGE = {
+  /* Chaque cran divise le plafond par deux : 9, 6, 3.
+     En Extreme on a exactement une charge de chaque — seul un boss
+     terrasse en redonne. C'est la regle la plus lisible du jeu :
+     "une de chaque, et le reste se merite". */
+  normal:    { base:1, recharges:2, seuil:40 },   /* 9 activations max */
+  difficile: { base:1, recharges:1, seuil:55 },   /* 6 activations max */
+  extreme:   { base:1, recharges:0, seuil:0  }    /* 3 : une de chaque, point */
+};
+function reglageBoosts(){
+  return BOOSTS_REGLAGE[loadout.difficulte] || BOOSTS_REGLAGE.normal;
+}
+function seuilRecharge(){ return reglageBoosts().seuil; }
+/* Combien d'activations restent pour CE type de boost. */
+function boostsRestantsType(type){
+  if(!G) return 99;
+  const u = (G.boostsUtilises && G.boostsUtilises[type]) || 0;
+  const gagnees = (G.boostsRecharges||0) + (G.boostsBonus||0);   /* kills + boss */
+  return Math.max(0, reglageBoosts().base + gagnees - u);
+}
+/* Conserve pour la barre et les tests : total encore activable. */
+function boostsRestants(){
+  return ['mitra','nuke','ghost'].reduce((t,k)=>t+boostsRestantsType(k), 0);
+}
+function plafondBoosts(){
+  const r=reglageBoosts();
+  return (r.base + r.recharges) * 3;      /* hors recharges de boss */
+}
+/* Appele a chaque ennemi abattu : declenche une recharge au seuil. */
+function verifierRechargeBoosts(g){
+  if(!g || g.demo) return;
+  if((g.boostsRecharges||0) >= reglageBoosts().recharges) return;
+  const seuil = seuilRecharge();
+  if((g.kills||0) < seuil * ((g.boostsRecharges||0)+1)) return;
+  g.boostsRecharges = (g.boostsRecharges||0)+1;
+  toast('\u26a1 '+T('BOOSTS RECHARGÉS')+' \u2022 '+seuil+' '+T('ennemis abattus'), 2600);
+  Audio2.jouerSfx('levelup'); haptique('bouton');
+  majBarreBonus();
+}
+/* Terrasser un boss redonne une charge de chaque, hors quota de recharges :
+   c'est le moment ou on en a le plus besoin, et ca recompense l'engagement. */
+function rechargeBoss(g){
+  if(!g || g.demo) return;
+  g.boostsBonus = (g.boostsBonus||0)+1;
+  g.boostsRecharges = (g.boostsRecharges||0);
+  ['mitra','nuke','ghost'].forEach(k=>{
+    if(g.boostsUtilises && g.boostsUtilises[k]>0) g.boostsUtilises[k]--;
+  });
+  toast('\u26a1 '+T('BOSS TERRASSÉ — boosts rechargés'), 3000);
+  majBarreBonus();
+}
+
+function activerBonus(type){
+  if(!G || !G.running) return;
+  if((S.charges[type]||0)<=0){ toast('Aucune charge de '+type); return; }
+  if(boostsRestantsType(type)<=0){
+    const s=seuilRecharge(), reste=Math.max(0, s*((G.boostsRecharges||0)+1)-(G.kills||0));
+    toast(((G.boostsRecharges||0) >= reglageBoosts().recharges)
+      ? T('Ce boost est épuisé pour ce secteur')
+      : T('Boost épuisé • encore {0} ennemis pour recharger', reste), 2800);
+    return;
+  }
+  if(G.cooldownBonus>0){ toast('Recharge en cours\u2026',1200); return; }
+  S.charges[type]--;
+  G.boostsUtilises=G.boostsUtilises||{};
+  G.boostsUtilises[type]=(G.boostsUtilises[type]||0)+1;
+  G.cooldownBonus=90; G.bonusUtilise=true;   /* 1,5 s entre deux activations */
+
+  if(type==='mitra'){
+    G.bonusActive='mitra'; G.bonusTimer=18*60;
+    toast('\ud83d\udd2b MITRAILLEUSE 18s'); sfx('power');
+  }
+  if(type==='nuke'){
+    G.enemies.forEach(e=>{ G.score+=25; G.kills++; spawnExplosion(e.x,e.y,22); });
+    G.enemies=[]; G.eBullets=[]; G.shake=28;
+    toast('\u2622\ufe0f BOMBE NUCL\u00c9AIRE'); sfx('nuke'); haptique('explosion');
+  }
+  if(type==='ghost'){
+    /* Deux fantomes en escorte, un de chaque cote */
+    G.companions=[
+      {x:G.player.x-56, y:G.player.y+14, r:16, life:22*60, cote:-1},
+      {x:G.player.x+56, y:G.player.y+14, r:16, life:22*60, cote: 1}
+    ];
+    G.companion=G.companions[0];              /* compat : ancien champ */
+    if(G.wing && G.wing.mort<=0){             /* le wingman recoit sa propre escorte */
+      G.companions.push({x:G.wing.x-46, y:G.wing.y+12, r:14, life:22*60, cote:-1, suit:'wing'});
+      G.companions.push({x:G.wing.x+46, y:G.wing.y+12, r:14, life:22*60, cote: 1, suit:'wing'});
+    }
+    toast('\ud83d\udc7b ESCORTE FANT\u00d4ME \u00d72 \u2022 22s'); sfx('power');
+  }
+  Audio2.jouerSfx('levelup'); haptique('bouton');
+  save(); majBarreBonus();
+}
+/* Ancien nom conserve : le premier bonus disponible */
+function activateBonus(){
+  const t=['mitra','nuke','ghost'].find(k=>(S.charges[k]||0)>0);
+  if(t) activerBonus(t);
+}
+/* Etat visuel des 3 boutons */
+function majBarreBonus(){
+  [['mitra','bonusMitra'],['nuke','bonusNuke'],['ghost','bonusGhost']].forEach(([k,slot])=>{
+    const b=document.getElementById('bb-'+k); if(!b) return;
+    const nb=Math.min(S.charges[k]||0, boostsRestantsType(k));
+    const img=ASSETS[slot];
+    b.innerHTML=(img?'<img src="'+img.src+'"/>':'<span style="font-size:18px">'+
+      (k==='mitra'?'\ud83d\udd2b':k==='nuke'?'\u2622\ufe0f':'\ud83d\udc7b')+'</span>')+
+      '<span class="nb">'+nb+'</span>';
+    b.classList.toggle('vide', nb<=0);
+    b.classList.toggle('pret', nb>0);
+  });
+}
+
+/* Cadence logique verrouillee a 60 Hz. L'ecran du Seeker monte a 120 Hz :
+   sans ce regulateur, update() tournait 120 fois par seconde et tout le jeu
+   (demo comprise) defilait deux fois trop vite. */
+/* Bande basse reservee a l'interface : boutons de boost (58px) + leur
+   marge (64px) + le bandeau du HUD. Le vaisseau ne descend jamais dedans. */
+const PLANCHER_VOL = 152;
+const PAS_LOGIQUE = 1000/60;
+function loop(ts){
+  if(!G||!G.running) return;
+  G.raf=requestAnimationFrame(loop);
+  const maintenant = (typeof ts==='number') ? ts : performance.now();
+  if(G.tPrec==null) G.tPrec=maintenant;
+  let ecart = maintenant - G.tPrec;
+  G.tPrec = maintenant;
+  if(ecart<0) ecart=0;
+  if(ecart>250) ecart=250;      /* retour d'onglet : on ne rattrape pas 10 s d'un coup */
+  G.reste = (G.reste||0) + ecart;
+  let tours=0;
+  while(G.reste>=PAS_LOGIQUE && tours<3){ update(); G.reste-=PAS_LOGIQUE; tours++; }
+  if(tours===0 && G.reste>PAS_LOGIQUE*0.98){ update(); G.reste=0; }
+  draw();
+}
+
+function update(){
+  const g=G, now=performance.now(); g.frame++;
+  /* --- Mouvement --- */
+  /* Decalage tactile : le vaisseau vole au-dessus du doigt, jamais dessous.
+     Sans ca, le pouce masque le vaisseau sur mobile. */
+  const OFFSET_DOIGT = 78;
+  /* 58px de bouton + 64px de marge basse + le bandeau HUD : le vaisseau
+     s'arrete au-dessus de tout ca. */
+  if(g.demo){ piloteAuto(g); }
+  else if(g.touchX!==null && g.meca==='inversion'){
+    /* Commandes inversees : le vaisseau vise le MIROIR du doigt.
+       L'ancienne formule le faisait fuir le doigt, donc s'eloigner sans fin
+       jusqu'a se coller au bord : la mecanique etait injouable. */
+    const cibleX = g.w - g.touchX;
+    g.player.x += (cibleX - g.player.x)*0.30;
+    if(g.touchY!=null){
+      const cibleY = g.h - (g.touchY - OFFSET_DOIGT);
+      g.player.y += (cibleY - g.player.y)*0.26;
+    }
+  }
+  else if(g.touchX!==null){
+    g.player.x+=(g.touchX-g.player.x)*0.32;
+    if(g.touchY!==null && g.touchY!==undefined){
+      const cible=g.touchY-OFFSET_DOIGT;          /* on vise au-dessus du point touche */
+      g.player.y+=(cible-g.player.y)*0.28;
+    }
+  }
+  let dir=g.demo?{dx:0,dy:0}:directionClavier();
+  if(g.meca==='inversion'){ dir={dx:-dir.dx, dy:-dir.dy}; }   /* Corruption : commandes inversees */
+  if(g.meca==='zeroG'){
+    /* Gravite zero : inertie au lieu d'un deplacement direct */
+    g.vx=(g.vx+dir.dx*0.55)*0.975;
+    g.vy=(g.vy+dir.dy*0.55)*0.975;
+    g.player.x+=g.vx*1.5; g.player.y+=g.vy*1.5;
+  } else if(dir.dx||dir.dy){ const v=7.2; g.player.x+=dir.dx*v; g.player.y+=dir.dy*v; }
+  g.player.x=Math.max(28,Math.min(g.w-28,g.player.x));
+  /* Plancher de vol : on garde libre la bande des boosts et le bandeau du
+     HUD, sinon le vaisseau se pose sur les boutons et les masque. */
+  g.player.y=Math.max(70, Math.min(g.h-PLANCHER_VOL, g.player.y));
+
+  let rateMult = g.mun.rate * (g.bonusActive==='mitra'?2.8:1) * (g.power.rapid>0?1.6:1);
+  if(now-g.lastShot > 230 / (S.fireRate * rateMult * g.shipBonus)){
+    g.lastShot=now; fire(); if(g.companions) g.companions.forEach(c=>fireCompanion(c)); sfx('shot');
+  }
+
+  g.bullets=g.bullets.filter(b=>{ b.x+=b.vx||0; b.y+=b.vy; return b.y>-50 && b.x>-40 && b.x<g.w+40; });
+
+  g.spawnT++;
+  if(!g.plusDeSpawn && g.spawnT>cadenceSpawn(g)){ g.spawnT=0; spawnEnemy(); }
+
+  g.enemies.forEach(e=>majEnnemi(e,g));
+  /* Retrait des mines eteintes : sans ca elles restaient indefiniment et
+     finissaient par occuper toute la place disponible. */
+  for(let i=g.enemies.length-1;i>=0;i--){
+    const e=g.enemies[i];
+    if(e.expiree){ parts(e.x,e.y,'#fbbf24',4); g.enemies.splice(i,1); }
+  }
+
+  /* --- Boss : warning, apparition, patterns --- */
+  if(!g.bossSpawned && !g.boss){
+    g.bossTimer++;
+    if(!g.infini){                       /* en mode infini, les vagues pilotent les boss */
+      const def=bossDuNoeud(S.currentNode, g.wave);
+      if(def && g.bossWarn===0 && (BOSS_DEFS[S.currentNode] ? g.bossTimer>420 : g.wave>=4)){
+        declencherBoss(g);
+      }
+    }
+  }
+  if(g.bossWarn>0){ g.bossWarn--; if(g.bossWarn===0) spawnBoss(g); }
+  if(g.boss) majBoss(g);
+  if(g.wing) majWingman(g);
+  majEvenement(g);
+  /* Arena : compte a rebours, la survie vaut la victoire */
+  if(g.arena){
+    g.chrono--;
+    if(g.arena.mod.primes && g.frame%420===0){
+      const e=creerEnnemi('bouclier', 60+Math.random()*(g.w-120), -40, g);
+      e.hp*=2.5; e.maxHp=e.hp; e.prime=true; e.color='#fbbf24'; ajouterEnnemi(g, e);
+    }
+    document.getElementById('hud-mode').textContent=Math.ceil(g.chrono/60)+'s';
+    if(g.chrono<=0){ g.arenaReussi=true; endGame(); return; }
+  }
+
+  /* --- Projectiles ennemis : deplacement + impact sur le joueur --- */
+  for(let i=g.eBullets.length-1;i>=0;i--){
+    const p=g.eBullets[i];
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.y<-40||p.y>g.h+40||p.x<-40||p.x>g.w+40){ g.eBullets.splice(i,1); continue; }
+    if(g.invuln<=0 && Math.hypot(p.x-g.player.x,p.y-g.player.y) < g.player.r+p.r-4){
+      g.eBullets.splice(i,1); g.lives--; g.viePerdue=true; g.invuln=75; g.shake=18; sfx('hurt'); haptique('degat');
+      parts(g.player.x,g.player.y,'#fb7185',8);
+      if(g.lives<=0){ endGame(); return; }
+    }
+  }
+
+  for(let i=g.bullets.length-1;i>=0;i--){
+    const b=g.bullets[i];
+    /* Impact sur le boss (prioritaire) */
+    if(g.boss && !g.boss.entree && Math.hypot(b.x-g.boss.x,b.y-g.boss.y)<g.boss.r*0.8){
+      g.boss.hp-=b.dmg; g.boss.flash=4; g.bullets.splice(i,1);
+      parts(b.x,b.y,g.boss.def.couleur,2); sfx('hit');
+      if(g.boss.hp<=0){ tuerBoss(g); }
+      continue;
+    }
+    for(let j=g.enemies.length-1;j>=0;j--){
+      const e=g.enemies[j];
+      const dx=b.x-e.x, dy=b.y-e.y;
+      if(dx*dx+dy*dy<(e.r+6)**2){
+        /* Bouclier : les tirs arrivant de face sont renvoyes */
+        if(e.kind==='bouclier'){
+          /* angle de l'ennemi VERS la balle, compare a l'orientation du bouclier */
+          const versBalle=Math.atan2(b.y-e.y, b.x-e.x);
+          let ecart=Math.abs(((versBalle-(e.angleBouclier||0))+Math.PI*3)%(Math.PI*2)-Math.PI);
+          if(ecart<1.0){
+            g.bullets.splice(i,1); parts(b.x,b.y,'#67e8f9',3); e.flash=3; sfx('hit'); break;
+          }
+        }
+        e.hp-=b.dmg; e.tueParWing=!!b.wing; g.bullets.splice(i,1); parts(e.x,e.y,e.color,2); sfx('hit');
+        if(e.hp<=0) kill(e,j);
+        break;
+      }
+    }
+  }
+
+  g.orbs=g.orbs.filter(o=>{
+    o.y+=o.vy; o.pulse=(o.pulse||0)+0.12;
+    /* Legere attraction quand le joueur approche : le ramassage est agreable */
+    const dx=g.player.x-o.x, dy=g.player.y-o.y, dist=Math.hypot(dx,dy);
+    const rayon=S.aimant?192:120;
+    if(dist<rayon){ o.x+=dx/dist*2.6; o.y+=dy/dist*2.6; }
+    if(dist<34){
+      appliquerDrop(o.t,g);
+      parts(o.x,o.y,o.color||'#14F195',8);
+      return false;
+    }
+    return o.y<g.h+30;
+  });
+
+  for(let j=g.enemies.length-1;j>=0;j--){
+    const e=g.enemies[j];
+    if(g.invuln<=0 && Math.hypot(e.x-g.player.x,e.y-g.player.y)<e.r+g.player.r-4){
+      const etaitKamikaze = (e.kind==='kamikaze' || e.kind==='minefixe');
+      g.invuln=75;
+      g.enemies.splice(j,1); g.lives--; g.viePerdue=true; g.shake=etaitKamikaze?24:16;
+      spawnExplosion(g.player.x,g.player.y);
+      if(etaitKamikaze){ parts(e.x,e.y,'#fb7185',18); sfx('nuke'); }
+      sfx('hurt'); haptique(etaitKamikaze?'explosion':'degat');
+      if(g.lives<=0){ endGame(); return; }
+    }
+    if(e.y>g.h+70) g.enemies.splice(j,1);
+  }
+
+  if(g.companions && g.companions.length){
+    g.companions.forEach(c=>{
+      c.life--;
+      const ref = (c.suit==='wing' && g.wing && g.wing.mort<=0) ? g.wing : g.player;
+      c.x+=((ref.x+56*c.cote)-c.x)*0.11;
+      c.y+=((ref.y+14)-c.y)*0.11;
+    });
+    g.companions=g.companions.filter(c=>c.life>0);
+    g.companion=g.companions[0]||null;
+  }
+  if(g.bonusActive==='mitra'){ g.bonusTimer--; if(g.bonusTimer<=0) g.bonusActive=null; }
+  if(g.power.rapid>0) g.power.rapid--;
+  if(g.power.perce>0) g.power.perce--;
+  if(g.power.shield>0){ g.power.shield--; g.invuln=Math.max(g.invuln,2); }   /* bouclier = invuln continue */
+  if(g.invuln>0) g.invuln--;
+  if(g.cooldownBonus>0) g.cooldownBonus--;
+  if(g.comboTimer>0) g.comboTimer--; else g.combo=1;
+  if(g.shake>0) g.shake--;
+  g.waveT++;
+  if(g.waveT>880){
+    g.waveT=0;
+    if(g.infini) vagueInfinie(g);
+    else {
+      g.wave++;
+      const cible=g.objectifVagues;
+      if(cible && g.wave>cible){ conclureSecteur(g,'vagues'); }
+      else toast('\u26a1 '+T('VAGUE')+' '+g.wave+(cible?' / '+cible:''), 1600);
+      if(!cible) Audio2.jouerSfx('wave_start'); else Audio2.jouerSfx('wave_start');
+    }
+    /* Un evenement toutes les 3 a 4 vagues, jamais deux d'affilee */
+    if(!g.event && g.wave>=3 && (g.wave%3===0 || Math.random()<0.28)) declencherEvenement(g);
+  }
+  g.particles=g.particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;return p.life>0;});
+  g.explosions=g.explosions.filter(ex=>{ex.life--;return ex.life>0;});
+
+  document.getElementById('hud-lives').textContent=g.lives;
+  document.getElementById('hud-score').textContent=g.score;
+  document.getElementById('hud-combo').textContent='x'+g.combo.toFixed(1);
+  majContratHud();
+  verifierPaliers(g);
+  document.getElementById('hud-frags').textContent=g.frags;
+  /* Avancement lisible : vague courante sur objectif, ou etat du boss */
+  const hw=document.getElementById('hud-wave');
+  if(hw){
+    if(g.objectifVagues) hw.textContent=T('VAGUE')+' '+Math.min(g.wave,g.objectifVagues)+'/'+g.objectifVagues;
+    else if(BOSS_DEFS[S.currentNode]) hw.textContent=g.boss?T('BOSS'):(T('VAGUE')+' '+g.wave);
+    else hw.textContent=T('VAGUE')+' '+g.wave;
+  }
+  document.getElementById('hud-ship').innerHTML=ico('ship'+loadout.ship, SHIPS[loadout.ship].emoji, 20);
+  const eff=[];
+  if(g.power.shield>0) eff.push('\ud83d\udee1\ufe0f');
+  if(g.power.rapid>0)  eff.push('\u26a1');
+  if(g.power.perce>0)  eff.push('\ud83d\udca5');
+  if(g.bonusActive==='mitra') eff.push('\ud83d\udd2b');
+  if(g.companions&&g.companions.length) eff.push('\ud83d\udc7b\u00d7'+g.companions.length);
+  document.getElementById('hud-pwr').textContent = eff.length?eff.join(' '):'—';
+}
+
+function fire(){
+  const g=G, mun=g.mun, dmg=(1.15+S.weapon*0.38)*mun.dmg*g.shipBonus*(g.power.perce>0?1.5:1)*(g.multDegats||1);
+  const px=g.player.x, py=g.player.y-18;
+  /* Les projectiles lateraux servent la COUVERTURE, pas la puissance.
+     A 90% et 75% des degats du central, le Spread cumulait cinq tirs
+     quasi pleins et faisait 3,3 fois le DPS des autres munitions. Ramenes
+     a 22% et 14%, il reste le meilleur en nappe et le plus faible sur
+     cible unique — ce qui est exactement son role. */
+  const LAT_1 = 0.22, LAT_2 = 0.14;
+  g.bullets.push({x:px,y:py,vy:-14,dmg});
+  if(mun.spread>=1 || S.weapon>=2){
+    g.bullets.push({x:px-12,y:py+4,vy:-13,vx:-0.7,dmg:dmg*LAT_1});
+    g.bullets.push({x:px+12,y:py+4,vy:-13,vx:0.7, dmg:dmg*LAT_1});
+  }
+  if(mun.spread>=2 || S.weapon>=4){
+    g.bullets.push({x:px-20,y:py+8,vy:-12,vx:-1.2,dmg:dmg*LAT_2});
+    g.bullets.push({x:px+20,y:py+8,vy:-12,vx:1.2, dmg:dmg*LAT_2});
+  }
+}
+function fireCompanion(c){ if(!c) return; G.bullets.push({x:c.x, y:c.y-10, vy:-12, dmg:1.3}); }
+
+/* Variantes avancees en vigueur, recalculees a chaque spawn selon le noeud et la vague */
+let VARIANTES = {};
+
+/* Fabrique : cree une unite d'un type donne, a une position donnee */
+function creerEnnemi(kind, x, y, g){
+  const hpM=g.mode.hp, spM=(g.mode.speed||1)*(g.mode.vitesse||1);
+  /* En Infini les deux premieres vagues restent aux PV de base :
+     le joueur a le temps de prendre ses reperes avant que ca monte. */
+  const v = g.infini ? Math.max(0, g.wave-2) : g.wave;
+  const modeles={
+    chasseur:{r:20, hp:1.1+v*0.26, vy:2.1+v*0.09, color:'#a78bfa', slot:'enemyChasseur', forme:'triangle'},
+    tireur:  {r:24, hp:2.0+v*0.34, vy:1.5,        color:'#38bdf8', slot:'enemyTireur',   forme:'carre',
+              posteY:70+Math.random()*90, tir:0, rafale:0},
+    kamikaze:{r:18, hp:0.8+v*0.16, vy:1.4+v*0.08, color:'#fb7185', slot:'enemyKamikaze', forme:'cercle', charge:false},
+    tank:    {r:34, hp:6+v*0.85,   vy:0.6+v*0.02, color:'#34d399', slot:'enemyTank',     forme:'hexagone'},
+    /* --- v4.2 : comportements qui changent le placement du joueur --- */
+    teleport:{r:19, hp:1.6+v*0.24, vy:1.2,        color:'#c084fc', slot:'enemyTeleport', forme:'losange', tp:110},
+    bouclier:{r:26, hp:3.2+v*0.45, vy:1.1,        color:'#67e8f9', slot:'enemyBouclier', forme:'hexagone'},
+    diviseur:{r:24, hp:2.4+v*0.38, vy:1.5,        color:'#f0abfc', slot:'enemyDiviseur', forme:'cercle'},
+    poseur:  {r:23, hp:2.6+v*0.38, vy:1.0,        color:'#fbbf24', slot:'enemyPoseur',   forme:'carre', pose:80}
+  };
+  const m=modeles[kind]||modeles.chasseur;
+  const e={kind, x, y, ...m};
+  /* Une variante peut remplacer le comportement, pas seulement l'apparence */
+  if(m.comport){ e.comport=m.comport; }
+  e.hp*=hpM; e.vy*=spM;
+  const av=VARIANTES[kind];
+  if(av){ e.slot=av.slot; e.hp*=av.hp; e.vy*=av.vy; e.avance=true; }
+  e.type=kind; e.maxHp=e.hp; e.flash=0;
+  return e;
+}
+
+/* Types disponibles selon l'avancement : la variete arrive progressivement */
+function typesDisponibles(nd, vague){
+  if(nd>=13) return ['chasseur','tireur','kamikaze','tank','diviseur','bouclier','teleport','poseur'];
+  const t=['chasseur','tireur','kamikaze','tank'];
+  if(nd>=3 || vague>4)  t.push('diviseur');
+  if(nd>=5 || vague>7)  t.push('bouclier');
+  if(nd>=7 || vague>10) t.push('teleport');
+  if(nd>=9 || vague>13) t.push('poseur');
+  return t;
+}
+
+/* ============================================================
+   EVENEMENTS DE VAGUE — une surprise toutes les 3 a 4 vagues
+   ============================================================ */
+const EVENEMENTS=[
+  {id:'meteores', nom:'\u2604\ufe0f PLUIE DE M\u00c9T\u00c9ORES', duree:600},
+  {id:'blackout', nom:'\ud83c\udf11 BLACKOUT',              duree:520},
+  {id:'invasion', nom:'\u2194\ufe0f INVASION LAT\u00c9RALE',    duree:420},
+  {id:'essaim',   nom:'\ud83d\udc1d ESSAIM',                duree:400},
+  {id:'chasse',   nom:'\ud83c\udfaf CHASSE \u2014 cible prioritaire', duree:900}
+];
+function declencherEvenement(g){
+  const ev=EVENEMENTS[Math.floor(Math.random()*EVENEMENTS.length)];
+  g.event={...ev, reste:ev.duree, t:0};
+  toast(ev.nom, 2600);
+  Audio2.jouerSfx('wave_start'); haptique('explosion'); g.shake=12;
+  if(ev.id==='chasse'){
+    /* une cible unique, tres resistante, qui rapporte gros */
+    const e=creerEnnemi('bouclier', g.w/2, -40, g);
+    e.hp*=4; e.maxHp=e.hp; e.prime=true; e.color='#fbbf24';
+    ajouterEnnemi(g, e);
+  }
+}
+function majEvenement(g){
+  const ev=g.event; if(!ev) return;
+  ev.reste--; ev.t++;
+  if(ev.id==='meteores' && ev.t%18===0){
+    /* meteores : rapides, en diagonale, ils traversent l'ecran */
+    const e=creerEnnemi('kamikaze', Math.random()*g.w, -30, g);
+    e.charge=true; e.vy*=2.2; e.hp=1; e.maxHp=1; e.color='#f59e0b';
+    ajouterEnnemi(g, e);
+  }
+  if(ev.id==='invasion' && ev.t%70===0){
+    const gauche=Math.random()<0.5;
+    for(let i=0;i<3;i++){
+      const e=creerEnnemi('chasseur', gauche?-30:g.w+30, 130+i*90, g);
+      e.vy=0.2; e.lateral=gauche?3:-3; ajouterEnnemi(g, e);
+    }
+  }
+  if(ev.id==='essaim' && ev.t%40===0){
+    for(let i=0;i<3;i++)
+      ajouterEnnemi(g, creerEnnemi('chasseur', 60+Math.random()*(g.w-120), -30-i*30, g));
+  }
+  if(ev.reste<=0){ g.event=null; }
+}
+
+/* ============================================================
+   DROPS — ce que les ennemis laissent tomber
+   Corrige le "on ne gagne rien pendant une partie".
+   ============================================================ */
+/* Poids de tirage. La vie est volontairement rare : c'est la ressource qui
+   decide d'une partie. Les credits restent genereux, ce sont eux qui
+   alimentent l'economie GC des vaisseaux. */
+const DROPS = {
+  vie:      {slot:'icoHealth',  couleur:'#f87171', r:15, poids:3,  nom:'+1 VIE'},
+  bouclier: {slot:'icoShield',  couleur:'#67e8f9', r:15, poids:10, nom:'BOUCLIER 8s'},
+  mitra:    {slot:'pwMinigun',  couleur:'#fbbf24', r:16, poids:8,  nom:'+1 MITRAILLEUSE'},
+  nuke:     {slot:'pwNuke',     couleur:'#fb7185', r:16, poids:5,  nom:'+1 BOMBE'},
+  ghost:    {slot:'pwGhost',    couleur:'#c4b5fd', r:16, poids:5,  nom:'+1 FANT\u00d4ME'},
+  rapide:   {slot:'ammoScatter',couleur:'#14F195', r:14, poids:15, nom:'CADENCE x1.6 10s'},
+  perce:    {slot:'ammoPerf',   couleur:'#a78bfa', r:14, poids:13, nom:'D\u00c9G\u00c2TS x1.5 12s'},
+  /* Butin : uniquement des credits de jeu, jamais de SOL ni de SKR */
+  noyau:    {slot:'orbSol',     couleur:'#9945FF', r:14, poids:20, nom:'NOYAU DE DONN\u00c9ES'},
+  eclat:    {slot:'orbSkr',     couleur:'#14F195', r:14, poids:20, nom:'\u00c9CLAT DE DONN\u00c9ES'}
+};
+/* Le butin se rarefie quand la difficulte monte. Sans ce correctif, un mode
+   plus dur generait plus d'ennemis donc PLUS de ressources : le jeu devenait
+   relativement plus facile a mesure qu'on montait en difficulte. */
+const RARETE_DIFFICULTE = { normal:1.00, difficile:0.80, extreme:0.65 };
+const MAX_VIES_LARGUEES = 3;   /* plafond par partie : pas de boule de neige */
+const DROPS_CLES=Object.keys(DROPS);
+const DROPS_TOTAL=DROPS_CLES.reduce((t,k)=>t+DROPS[k].poids,0);
+
+function tirerDrop(){
+  let r=Math.random()*DROPS_TOTAL;
+  for(const k of DROPS_CLES){ r-=DROPS[k].poids; if(r<=0) return k; }
+  return 'eclat';
+}
+/* Un ennemi sur quatre laisse quelque chose ; les gros types beaucoup plus
+   souvent. Le tout module par la difficulte choisie. */
+function larguerDrop(e,g){
+  const gros = ['tank','bouclier','poseur','teleport','diviseur'].includes(e.kind);
+  const rarete = (g.rareteButin!==undefined) ? g.rareteButin
+                                            : (RARETE_DIFFICULTE[loadout.difficulte]||1);
+  const chance = (e.prime?1 : gros?0.52 : 0.26) * (g.multDrops||1) * rarete;
+  if(Math.random()>chance) return;
+  let k=tirerDrop();
+  /* Plafond de vies larguees : au-dela, le tirage retombe sur des credits. */
+  if(k==='vie'){
+    if((g.viesLarguees||0)>=MAX_VIES_LARGUEES) k = Math.random()<0.5?'noyau':'eclat';
+    else g.viesLarguees=(g.viesLarguees||0)+1;
+  }
+  const d=DROPS[k];
+  g.orbs.push({x:e.x, y:e.y, vy:1.5, t:k, r:d.r, slot:d.slot, color:d.couleur, pulse:0});
+}
+
+/* Application d'un drop ramasse */
+function appliquerDrop(k,g){
+  const d=DROPS[k];
+  if(k==='vie'){ g.lives++; }
+  else if(k==='bouclier'){ g.power.shield=8*60; g.invuln=Math.max(g.invuln,20); }
+  else if(k==='rapide'){ g.power.rapid=10*60; }
+  else if(k==='perce'){ g.power.perce=12*60; }
+  else if(k==='noyau'){ g.score+=18; g.noyaux=(g.noyaux||0)+1; }
+  else if(k==='eclat'){ g.score+=12; g.frags+=3; }
+  else { S.charges[k]=(S.charges[k]||0)+1; save(); majBarreBonus(); }
+  toast(d.nom, 1500);
+  Audio2.jouerSfx('pickup'); sfx('power'); haptique('bouton');
+}
+
+/* ---- Formations : les ennemis n'arrivent plus un par un ---- */
+const FORMATIONS=['solo','v','ligne','arc','lateral','essaim',
+                  'tenaille','colonne','croix','echelle','embuscade','duo'];
+function lancerFormation(g){
+  const nd=S.currentNode, dispo=typesDisponibles(nd, g.wave);
+  const kind=dispo[Math.floor(Math.random()*dispo.length)];
+  /* les formations groupees apparaissent surtout apres quelques vagues */
+  const poids = g.wave<2 ? ['solo','solo','solo','v'] : FORMATIONS;
+  const f=poids[Math.floor(Math.random()*poids.length)];
+  const cx=90+Math.random()*(g.w-180);
+  if(f==='v'){
+    for(let i=-2;i<=2;i++)
+      ajouterEnnemi(g, creerEnnemi(kind, cx+i*44, -30-Math.abs(i)*34, g));
+  } else if(f==='ligne'){
+    for(let i=0;i<4;i++)
+      ajouterEnnemi(g, creerEnnemi(kind, 60+i*((g.w-120)/3), -30, g));
+  } else if(f==='arc'){
+    for(let i=0;i<5;i++){
+      const a=Math.PI*(0.18+0.16*i);
+      ajouterEnnemi(g, creerEnnemi(kind, g.w/2+Math.cos(a)*150, -30-Math.sin(a)*70, g));
+    }
+  } else if(f==='lateral'){
+    /* arrivee par le cote : casse le reflexe "tout vient du haut" */
+    const gauche=Math.random()<0.5;
+    for(let i=0;i<3;i++){
+      const e=creerEnnemi(kind, gauche?-30:g.w+30, 120+i*80, g);
+      e.vy=0.2; e.lateral=gauche?2.6:-2.6;
+      ajouterEnnemi(g, e);
+    }
+    toast('\u2194\ufe0f Flanc !',1100);
+  } else if(f==='essaim'){
+    for(let i=0;i<7;i++)
+      ajouterEnnemi(g, creerEnnemi('chasseur', cx+(Math.random()-0.5)*130, -30-Math.random()*90, g));
+  }
+  /* ---------- Formations ajoutees : elles changent l'angle d'attaque ---------- */
+  else if(f==='tenaille'){
+    /* Les deux flancs en meme temps : impossible de rester colle a un bord */
+    for(let cote of [-1,1]){
+      for(let i=0;i<2;i++){
+        const e=creerEnnemi(kind, cote<0?-30:g.w+30, 150+i*95, g);
+        e.vy=0.25; e.lateral=cote<0?2.8:-2.8;
+        ajouterEnnemi(g, e);
+      }
+    }
+    toast('\u2194\ufe0f Tenaille !',1200);
+  }
+  else if(f==='colonne'){
+    /* File indienne rapide : il faut ouvrir un couloir puis s'y tenir */
+    for(let i=0;i<5;i++){
+      const e=creerEnnemi(kind, cx, -30-i*62, g);
+      e.vy*=1.35;
+      ajouterEnnemi(g, e);
+    }
+  }
+  else if(f==='croix'){
+    /* Deux diagonales qui se croisent au centre de l'ecran */
+    for(let i=0;i<3;i++){
+      const a=creerEnnemi(kind, 40+i*30, -30-i*40, g);  a.derive= 0.9; ajouterEnnemi(g,a);
+      const b=creerEnnemi(kind, g.w-40-i*30, -30-i*40, g); b.derive=-0.9; ajouterEnnemi(g,b);
+    }
+  }
+  else if(f==='echelle'){
+    /* Marches decalees : oblige a monter ou descendre en biais */
+    for(let i=0;i<5;i++)
+      ajouterEnnemi(g, creerEnnemi(kind, 55+i*((g.w-110)/4), -30-i*55, g));
+  }
+  else if(f==='embuscade'){
+    /* Ils entrent lentement puis accelerent d'un coup a mi-ecran */
+    for(let i=-1;i<=1;i++){
+      const e=creerEnnemi(kind, cx+i*70, -30-Math.abs(i)*25, g);
+      e.vy*=0.35; e.embuscade=true;
+      ajouterEnnemi(g, e);
+    }
+  }
+  else if(f==='duo'){
+    /* Deux types differents en meme temps : fin de la monotonie du groupe unique */
+    const autre=dispo[Math.floor(Math.random()*dispo.length)];
+    for(let i=-1;i<=1;i+=2){
+      ajouterEnnemi(g, creerEnnemi(kind,  cx+i*68, -30, g));
+      ajouterEnnemi(g, creerEnnemi(autre, cx+i*34, -95, g));
+    }
+  }
+  else {
+    ajouterEnnemi(g, creerEnnemi(kind, 44+Math.random()*(g.w-88), -30, g));
+  }
+}
+
+/* Ajout centralise : TOUT ennemi passe par ici, y compris les formations,
+   les invocations de boss et les fragments de diviseur. Au-dela du plafond
+   dur, on refuse plutot que d'empiler jusqu'a faire ramer l'appareil. */
+function unitesActives(g){
+  /* Les mines posees ne sont pas des unites : elles ne doivent pas
+     bloquer l'apparition des ennemis. */
+  let k=0;
+  for(const e of g.enemies) if(e.kind!=='minefixe') k++;
+  return k;
+}
+function ajouterEnnemi(g, e){
+  if(!e) return null;
+  const dur = (e.kind==='minefixe') ? PLAFOND_DUR+14 : PLAFOND_DUR;
+  if(g.enemies.length >= dur) return null;
+  g.enemies.push(e);
+  return e;
+}
+const PLAFOND_DUR = 30;
+
+/* Plafond d'unites simultanees. Sans lui, un secteur dense finit par
+   empiler 200 ennemis : le telephone rame et l'ecran devient illisible.
+   Le plafond depend du mode choisi, pas de la vague. */
+function plafondEnnemis(g){
+  const base = g.infini ? 24 : 22;
+  const parMode = {facile:16, explo:19, pilote:22, chasseur:26};
+  return Math.min(PLAFOND_DUR, (parMode[g.mode.id] || base) + (g.mode.bonusUnites||0));
+}
+
+function spawnEnemy(){
+  const g=G;
+  /* Saturation : on attend qu'il y ait de la place plutot que d'empiler */
+  if(unitesActives(g) >= plafondEnnemis(g)) return;
+  /* Les variantes avancees restent pilotees par le noeud */
+  const nd=S.currentNode;
+  const carte2 = nd>=13;      /* CHAOS PROTOCOL : sprites et statistiques dedies */
+  VARIANTES = carte2 ? {
+    chasseur:{slot:'cxRapide', hp:2.1, vy:1.45},
+    tireur:  {slot:'cxSniper', hp:2.0, vy:1.1},
+    tank:    {slot:'cxTank',   hp:2.4, vy:0.9},
+    kamikaze:{slot:'cxGuepe',  hp:1.5, vy:1.2},
+    diviseur:{slot:'cxDrone',  hp:1.8, vy:1.2},
+    bouclier:{slot:'cxLourd',  hp:2.2, vy:0.95},
+    teleport:{slot:'cxElite',  hp:1.9, vy:1.15},
+    poseur:  {slot:'cxBoss',   hp:2.0, vy:0.9}
+  } : {
+    /* Trois paliers de variantes : plus on avance, plus les unites sont serieuses */
+    chasseur:(nd>=11||g.wave>15)?{slot:'enemyZeroG',      hp:1.9, vy:1.4}
+            :(nd>=9 ||g.wave>10)?{slot:'enemyDroneAv',    hp:1.5, vy:1.25, comport:'harceleur'}:null,
+    tireur:  (nd>=10||g.wave>13)?{slot:'enemySniperElite',hp:1.8, vy:1.05}
+            :(nd>=7 ||g.wave>8) ?{slot:'enemySniper',     hp:1.4, vy:1.0} :null,
+    tank:    (nd>=12||g.wave>18)?{slot:'enemyDroneHeavy', hp:2.2, vy:0.85}
+            :(nd>=10||g.wave>14)?{slot:'enemyTankCorr',   hp:1.7, vy:0.9} :null,
+    kamikaze:(nd>=11||g.wave>16)?{slot:'enemyMineA',      hp:1.3, vy:1.15}:null
+  };
+  if(g.infini){
+    ajouterEnnemi(g, creerEnnemi(typeInfini(g.wave), 44+Math.random()*(g.w-88), -30, g));
+    return;
+  }
+  lancerFormation(g);
+}
+
+/* ---------- Comportement par type (appele chaque frame) ---------- */
+function majEnnemi(e,g){
+  if(e.flash>0) e.flash--;
+  /* Effets herites de la formation, valables quel que soit le type */
+  if(e.derive){ e.x+=e.derive; }
+  if(e.embuscade && e.y>g.h*0.34){       /* la charge se declenche a mi-ecran */
+    e.embuscade=false; e.vy*=3.4; e.flash=10;
+  }
+  if(e.lateral){                      /* entree par le flanc, puis reprise du comportement normal */
+    e.x+=e.lateral;
+    if(e.x>60 && e.x<g.w-60) e.lateral=0;
+    return;
+  }
+  /* ---- HARCELEUR (drone avance N9+) : il ne fonce pas, il gene ----
+     Il se poste sur un flanc a hauteur du joueur, tire en diagonale, et
+     change de cote des que le joueur se rapproche trop. Il oblige a
+     interrompre son placement pour aller le chercher. */
+  if(e.comport==='harceleur'){
+    const p=g.player;
+    if(e.cote===undefined){ e.cote = (e.x<g.w/2) ? -1 : 1; e.tir=40; e.repli=0; }
+    const posteX = e.cote<0 ? g.w*0.16 : g.w*0.84;
+    const posteY = Math.max(90, p.y - 190);
+    e.x += (posteX - e.x)*0.045;
+    e.y += (posteY - e.y)*0.035 + 0.25;
+
+    /* le joueur vient le deloger : il file de l'autre cote */
+    if(Math.hypot(p.x-e.x, p.y-e.y) < 150 && e.repli<=0){
+      e.cote*=-1; e.repli=95; e.flash=8;
+    }
+    if(e.repli>0) e.repli--;
+
+    e.tir--;
+    if(e.tir<=0){
+      /* tir en diagonale vers le joueur, jamais purement vertical */
+      const a=Math.atan2(p.y-e.y, p.x-e.x);
+      tirEnnemi(e.x, e.y+14, Math.cos(a)*4.6, Math.max(2.2,Math.sin(a)*4.6), '#a78bfa', 'balle');
+      e.tir = Math.round(74/(g.mode.cadence||1));
+    }
+    /* il ne descend jamais jusqu'en bas : on le combat, on ne l'attend pas */
+    e.y = Math.min(e.y, g.h*0.62);
+    return;
+  }
+
+  if(e.kind==='chasseur'){
+    /* ---- CHASSEUR : trois tactiques tirees au sort a l'apparition ----
+       Fini la ligne droite. Chaque unite pilote avec de l'inertie,
+       ce qui produit des courbes au lieu de trajectoires rigides. */
+    if(!e.tac){ e.tac=['intercept','zigzag','flanc'][(Math.random()*3)|0]; e.vx=0; e.tacT=0; }
+    e.tacT++;
+    const p=g.player;
+    let ciblex;
+
+    if(e.tac==='intercept'){
+      /* Anticipe : vise la ou le joueur SERA, pas la ou il est.
+         Le temps de vol estime depend de la distance verticale restante. */
+      const dt = Math.max(0, (p.y - e.y)) / Math.max(0.6, e.vy) * 0.55;
+      const vJoueur = (p.x - (e.dernierX!==undefined ? e.dernierX : p.x));
+      ciblex = p.x + vJoueur * dt;
+    }
+    else if(e.tac==='zigzag'){
+      /* Balayage lateral qui se resserre en approchant du joueur */
+      const prox = 1 - Math.min(1, Math.abs(p.y-e.y)/g.h);
+      const ampl = 90 * (1 - prox*0.65);
+      ciblex = p.x + Math.sin(e.tacT*0.055 + e.y*0.01) * ampl;
+    }
+    else {
+      /* FLANC : plonge sur le cote oppose, depasse le joueur, puis revient
+         par le travers. Oblige a surveiller les bords. */
+      const cote = (e.cote!==undefined) ? e.cote : (e.cote = (e.x < g.w/2 ? -1 : 1));
+      ciblex = (e.y < g.h*0.55) ? (p.x + cote*150) : (p.x - cote*40);
+    }
+    e.dernierX = p.x;
+
+    /* Pilotage par acceleration : l'unite ne se telepporte pas sur la cible */
+    const ecart = ciblex - e.x;
+    const accel = Math.max(-0.42, Math.min(0.42, ecart*0.012));
+    e.vx = (e.vx||0)*0.92 + accel;
+    e.vx = Math.max(-4.4, Math.min(4.4, e.vx));
+    e.x += e.vx;
+
+    /* Piqué final : sous une certaine distance il accelere sechement */
+    const dist = Math.hypot(p.x-e.x, p.y-e.y);
+    e.y += e.vy * (dist<210 ? 1.55 : 1);
+
+    /* Rebond souple sur les bords, il ne sort jamais du terrain */
+    if(e.x<22){ e.x=22; e.vx=Math.abs(e.vx)*0.6; }
+    if(e.x>g.w-22){ e.x=g.w-22; e.vx=-Math.abs(e.vx)*0.6; }
+  }
+  else if(e.kind==='tireur'){
+    /* Trois ecoles de tir tirees au sort : la parade n'est jamais la meme */
+    if(!e.ecole) e.ecole=['rafale','eventail','predictif'][(Math.random()*3)|0];
+    if(e.y<e.posteY) e.y+=e.vy;                                            /* descend puis stationne */
+    else {
+      e.x+=Math.sin(g.frame*0.02+e.posteY)*0.9;
+      e.tir--;
+      if(e.tir<=0){
+        e.rafale=(e.rafale||0)+1;
+        const munition = e.avance?'lance':'plasma';
+        if(e.ecole==='eventail'){
+          /* Trois traits ecartes : couvre une zone, se contourne par les cotes */
+          for(let k=-1;k<=1;k++) tirEnnemi(e.x, e.y+18, k*1.9, 5.1, '#fb923c', munition);
+          e.tir = Math.round(66/(g.mode.cadence||1));
+        } else if(e.ecole==='predictif'){
+          /* Vise ou le joueur SERA : rester en mouvement rectiligne ne sauve plus */
+          const p=g.player;
+          const dt=Math.max(0,(p.y-e.y))/5.6;
+          const vx=(p.x-(e.viseX!==undefined?e.viseX:p.x));
+          e.viseX=p.x;
+          const cible=p.x+vx*dt*0.5;
+          const dx=Math.max(-2.6,Math.min(2.6,(cible-e.x)*0.02));
+          tirEnnemi(e.x, e.y+18, dx, 5.4, '#fb923c', munition);
+          e.tir = Math.round(52/(g.mode.cadence||1));
+        } else {
+          tirEnnemi(e.x,e.y+18,0,5.6,'#fb923c', munition);                  /* rafale de 3 */
+          e.tir = Math.round(((e.rafale%3===0) ? 78 : 11) / (g.mode.cadence||1));
+        }
+      }
+    }
+  }
+  else if(e.kind==='kamikaze'){
+    /* Un sur trois marque un temps d'arret avant de plonger : la feinte
+       casse le reflexe d'esquive automatique. */
+    if(e.feinte===undefined) e.feinte = Math.random()<0.34 ? 42 : 0;
+    if(e.feinte>0 && e.y>g.h*0.22){
+      e.feinte--; e.x+=Math.sin(g.frame*0.13)*1.6;
+      if(e.feinte===0) e.flash=8;
+      return;
+    }
+    if(!e.charge && e.y>(e.avance?g.h*0.15:g.h*0.3)) e.charge=true;   /* la mine s'amorce plus tot */                            /* declenche la charge */
+    if(e.charge){
+      const a=Math.atan2(g.player.y-e.y, g.player.x-e.x);
+      const v=e.vy*2.6;
+      e.x+=Math.cos(a)*v; e.y+=Math.sin(a)*v;
+    } else e.y+=e.vy;
+  }
+  else if(e.kind==='teleport'){
+    /* TELEPORTEUR : se volatilise et reapparait ailleurs, souvent derriere le joueur */
+    e.y+=e.vy*0.6;
+    e.tp=(e.tp||120)-1;
+    if(e.tp<=0){
+      e.invisible=(e.invisible?0:22);
+      if(!e.invisible){
+        e.x=40+Math.random()*(g.w-80);
+        e.y=g.player.y + (Math.random()<0.5? -110 : 90);
+        e.y=Math.max(60,Math.min(g.h-90,e.y));
+        parts(e.x,e.y,'#a78bfa',10);
+      }
+      e.tp = e.invisible? 22 : (100+Math.random()*80);
+    }
+  }
+  else if(e.kind==='bouclier'){
+    /* PORTEUR DE BOUCLIER : invulnerable de face, il faut le contourner */
+    e.y+=e.vy;
+    e.x+=Math.sin(g.frame*0.02+e.r)*1.1;
+    e.angleBouclier=Math.atan2(g.player.y-e.y, g.player.x-e.x);
+  }
+  else if(e.kind==='diviseur'){
+    /* DIVISEUR : descend en cloche, se scinde en deux a la mort */
+    e.y+=e.vy;
+    e.x+=Math.cos(e.y*0.026)*1.9;
+  }
+  else if(e.kind==='poseur'){
+    /* POSEUR : seme des mines statiques sur son passage */
+    e.y+=e.vy;
+    e.x+=Math.sin(e.y*0.02)*1.3;
+    e.pose=(e.pose===undefined?80:e.pose)-1;
+    if(e.pose<=0 && g.enemies.filter(x=>x.kind==='minefixe').length<8){   /* 8 mines au sol au maximum */
+      ajouterEnnemi(g, {kind:'minefixe', x:e.x, y:e.y, r:13, hp:1, maxHp:1, vy:0,
+                      color:'#dc2626', forme:'cercle', vie:900, flash:0, derivY:0.18});
+      e.pose=110;
+    }
+  }
+  else if(e.kind==='minefixe'){
+    /* MINE LARGUEE : elle descend lentement vers la zone du joueur.
+       Immobile, elle restait en haut de l'ecran et ne menacait personne. */
+    e.vie--;
+    e.derivY = Math.min(1.15, (e.derivY||0.18)+0.004);   /* accelere doucement */
+    e.y += e.derivY;
+    e.x += Math.sin((G.frame||0)*0.03 + e.y*0.01)*0.35;   /* leger balancement */
+    if(e.y > g.h+40){ e.expiree=true; }                    /* sortie d'ecran */
+    if(e.vie<=0){ e.expiree=true; }
+    else if(e.vie<90 && Math.floor(e.vie/6)%2===0){ e.flash=2; }   /* clignote avant de s'eteindre */
+  }
+  else {
+    /* TANK et variantes lourdes : lent, roulis, et surtout une salve lourde.
+       Sans tir il traversait l'ecran sans jamais menacer personne. La cadence
+       est basse et le projectile lent : on doit pouvoir l'esquiver, mais il
+       faut s'en occuper. */
+    e.y+=e.vy; e.x+=Math.sin(e.y*0.02)*0.7;
+    if(e.y>0 && e.y<g.h*0.72){
+      e.tir=(e.tir===undefined?110:e.tir)-1;
+      if(e.tir<=0){
+        const p=g.player;
+        const a=Math.atan2(p.y-e.y, p.x-e.x);
+        /* deux orbes lourds, ecartes : on passe entre les deux */
+        for(const dec of [-0.22, 0.22]){
+          tirEnnemi(e.x, e.y+16, Math.cos(a+dec)*3.1, Math.max(1.8, Math.sin(a+dec)*3.1),
+                    '#34d399', 'orbe');
+        }
+        e.flash=6;
+        e.tir = Math.round(132/(g.mode.cadence||1));
+      }
+    }
+  }
+}
+
+/* ---------- Projectiles ennemis ---------- */
+/* Sprite de projectile selon le tireur : chaque menace se reconnait d'un coup d'oeil */
+const PROJ_SPRITE={ plasma:'projPlasma', lance:'projLance', orbe:'projOrbe',
+                    disque:'projDisque', missile:'projMissile', singularite:'projSingularite',
+                    /* deux munitions supplementaires : le tir de boss et la balle
+                       standard, jusqu'ici jamais affichees */
+                    tirBoss:'projBoss', balle:'projBalle' };
+function tirEnnemi(x,y,vx,vy,couleur,type){
+  if(!G) return;
+  if(G.frame%9===0) Audio2.jouerSfx('enemy_shoot');   /* pas a chaque projectile */
+  const t=type||'plasma';
+  const gros = (t==='orbe'||t==='disque'||t==='singularite');
+  G.eBullets.push({x,y,vx,vy,r:gros?11:6,color:couleur||'#fb7185',
+                   sprite:PROJ_SPRITE[t]||null, angle:Math.atan2(vy,vx),
+                   spin:(t==='disque'?0.22:t==='tirBoss'?0.14:0)});
+}
+
+/* ---------- Apparition du boss ---------- */
+function declencherBoss(g){
+  const def=g.bossDef || bossDuNoeud(S.currentNode, g.wave);
+  if(!def) return;
+  g.bossDef=def;
+  g.bossWarn=110;                                              /* 1.8s de warning avant l'entree */
+  toast('\u26a0\ufe0f '+def.nom+' D\u00c9TECT\u00c9',2600);
+  sfx('nuke'); vibrate(70);
+}
+function spawnBoss(g){
+  const def=g.bossDef || bossDuNoeud(S.currentNode, g.wave); if(!def) return;
+  const hp=Math.round((34+S.weapon*4)*def.hpMult*g.mode.hp);
+  g.boss={ def, x:g.w/2, y:-def.rayon*1.2, r:def.rayon, hp, maxHp:hp,
+           phase:1, angle:0, tir:40, invoque:260, entree:true, flash:0, dir:1 };
+  g.bossSpawned=true;
+}
+
+/* ---------- Comportement du boss : patterns + phases ---------- */
+function majBoss(g){
+  const b=g.boss; if(!b) return;
+  const d=b.def;
+  if(b.flash>0) b.flash--;
+  if(b.entree){                                                /* animation d'entree */
+    b.y+=2.2;
+    if(b.y>=110){ b.y=110; b.entree=false; }
+    return;
+  }
+  b.angle+=d.rotation||0;
+  /* Phase 2 du dragon a 50% PV : plus rapide, pattern renforce */
+  /* NEXUS PRIME : 5 apparences, une mutation tous les 20 % de PV */
+  if(d.phases5){
+    const palier = Math.min(5, 1+Math.floor((1-b.hp/b.maxHp)/0.2));
+    if(palier>b.phase){
+      b.phase=palier; b.flash=16; g.shake=26;
+      toast('\u26a1 MUTATION \u2014 FORME '+palier+'/5',2400);
+      sfx('nuke'); haptique('boss');
+      for(let i=0;i<10;i++) parts(b.x+(Math.random()-0.5)*110, b.y+(Math.random()-0.5)*110, d.couleur, 7);
+    }
+  }
+  if(d.phases3 && !d.phases5 && b.phase===2 && b.hp<=b.maxHp*0.22){
+    b.phase=3; toast('\u2620\ufe0f PHASE FINALE \u2014 '+d.nom,3000); sfx('nuke'); haptique('boss'); g.shake=30;
+  }
+  if(d.phase2 && b.phase===1 && b.hp<=b.maxHp*0.5){
+    b.phase=2; toast('\ud83d\udd25 PHASE 2 \u2014 '+d.nom+' EN FUREUR',2600);
+    sfx('nuke'); haptique('boss'); g.shake=24; b.flash=14;
+    for(let i=0;i<8;i++) parts(b.x+(Math.random()-0.5)*90, b.y+(Math.random()-0.5)*90, d.couleur, 6);
+  }
+  const vitesse = 1.7 + Math.min(b.phase-1,4)*0.62;   /* acceleration progressive */
+  b.x+=b.dir*vitesse;
+  if(b.x<70){ b.x=70; b.dir=1; } if(b.x>g.w-70){ b.x=g.w-70; b.dir=-1; }
+
+  b.tir--;
+  if(b.tir<=0){
+    if(d.pattern==='spirale'){                                 /* VORTEX : spirale continue */
+      const nb=b.phase===2?3:2;
+      for(let i=0;i<nb;i++){
+        const a=b.angle*7+i*(Math.PI*2/nb);
+        tirEnnemi(b.x,b.y,Math.cos(a)*4.2,Math.sin(a)*4.2+1.2,'#c084fc','disque');
+      }
+      b.tir=Math.max(3,Math.round(7/(g.mode.cadence||1)));
+    }
+    else if(d.pattern==='croix'){                              /* SENTINELLE : croix rotative */
+      const base=b.angle+ (b.phase===2?0.5:0);
+      for(let i=0;i<4;i++){
+        const a=base+i*Math.PI/2;
+        tirEnnemi(b.x,b.y,Math.cos(a)*4.6,Math.sin(a)*4.6,'#67e8f9','missile');
+      }
+      b.angle+=0.42; b.tir=Math.round((b.phase===2?26:38)/(g.mode.cadence||1));
+    }
+    else if(d.pattern==='fusion'){
+      /* NEXUS : alterne les trois patterns, intensite selon la phase */
+      const cycle=Math.floor(g.frame/240)%3;
+      if(cycle===0){
+        const nb=b.phase>=2?4:3;
+        for(let i=0;i<nb;i++){ const a=b.angle*7+i*(Math.PI*2/nb);
+          tirEnnemi(b.x,b.y,Math.cos(a)*4.4,Math.sin(a)*4.4+1,'#c084fc','singularite'); }
+        b.tir=Math.max(4,Math.round(8/(g.mode.cadence||1)));
+      } else if(cycle===1){
+        for(let i=0;i<4;i++){ const a=b.angle+i*Math.PI/2;
+          tirEnnemi(b.x,b.y,Math.cos(a)*4.8,Math.sin(a)*4.8,'#67e8f9','disque'); }
+        b.angle+=0.5; b.tir=Math.round((b.phase>=2?22:32)/(g.mode.cadence||1));
+      } else {
+        const nb=b.phase>=2?9:6, ouv=1.6;
+        const vise=Math.atan2(g.player.y-b.y, g.player.x-b.x);
+        for(let i=0;i<nb;i++){ const a=vise-ouv/2+ouv*(i/(nb-1));
+          tirEnnemi(b.x,b.y+18,Math.cos(a)*5.4,Math.sin(a)*5.4,'#f0abfc','singularite'); }
+        b.tir=Math.round((b.phase>=2?36:56)/(g.mode.cadence||1));
+      }
+    }
+    else {                                                     /* DRAGON : eventail vers le joueur */
+      const nb=b.phase===2?7:5, ouv=b.phase===2?1.5:1.0;
+      const vise=Math.atan2(g.player.y-b.y, g.player.x-b.x);
+      for(let i=0;i<nb;i++){
+        const a=vise-ouv/2+ouv*(i/(nb-1));
+        tirEnnemi(b.x,b.y+20,Math.cos(a)*5.2,Math.sin(a)*5.2,'#f0abfc',
+                  (d.id==='prime'||d.id==='gardien')?'tirBoss':'missile');
+      }
+      b.tir=Math.round((b.phase===2?42:66)/(g.mode.cadence||1));
+    }
+  }
+  /* Invocations : le boss appelle des renforts */
+  if(d.invoque){
+    b.invoque--;
+    if(b.invoque<=0){ spawnEnemy(); spawnEnemy(); b.invoque=b.phase===2?190:300; toast('\u2795 RENFORTS'); }
+  }
+}
+
+function tuerBoss(g){
+  const b=g.boss, def=b.def;
+  /* Sequence de mort : on l'arme toujours, le rendu utilise le sprite s'il est la */
+  g.mortBoss={x:b.x, y:b.y, life:70, maxLife:70,
+               sprite: def.mort || (def.id==='nexus'?'nexusDeath':def.id==='prime'?'primeDeath':null)};
+  for(let i=0;i<10;i++) setTimeout(()=>{ if(G) spawnExplosion(b.x+(Math.random()-0.5)*120, b.y+(Math.random()-0.5)*120, 28); }, i*95);
+  g.score+=Math.floor(900*g.mode.reward); g.frags+=14; g.kills++;
+  rechargeBoss(g);   /* terrasser un boss redonne une charge de chaque */
+  S.totalKills++; S.secretBossKilled=true;
+  g.boss=null; g.shake=34; sfx('nuke'); haptique('boss');
+  if(def.mini){ g.bossSpawned=false; g.bossTimer=0; g.bossDef=null; }   /* un autre eclaireur viendra */
+  toast('\ud83c\udfc6 '+def.nom+' TERRASS\u00c9',3200);
+  if(!g.infini && !def.mini){
+    tenterFragment(S.currentNode);                 /* peut laisser un fragment de cle */
+    if(!g.arena && !g.coop) conclureSecteur(g,'boss');   /* le boss tombe : mission accomplie */
+  }
+}
+
+function kill(e,idx){
+  const g=G; g.enemies.splice(idx,1);
+  if(g.wing){ if(e.tueParWing) g.wing.kills++; else g.killsJoueur=(g.killsJoueur||0)+1; }
+  /* DIVISEUR : deux fragments plus rapides prennent sa place */
+  if(e.kind==='diviseur' && !e.fragment && g.enemies.length<28){
+    for(const s of [-1,1]){
+      ajouterEnnemi(g, {kind:'chasseur', fragment:true, x:e.x+s*22, y:e.y, r:e.r*0.62,
+        hp:Math.max(1,e.maxHp*0.35), maxHp:Math.max(1,e.maxHp*0.35), vy:e.vy*1.5,
+        color:'#f0abfc', slot:e.slot, forme:'triangle', flash:0});
+    }
+    toast('\u2702\ufe0f Il se divise !',1200);
+  }
+  let base=e.type==='boss'?110:e.type==='heavy'?18:e.type==='node'?10:6;
+  if(e.kind==='tank'||e.kind==='bouclier') base=16;
+  if(e.kind==='diviseur'||e.kind==='teleport'||e.kind==='poseur') base=12;
+  if(e.prime){ base=180; toast('\ud83d\udcb0 Prime encaiss\u00e9e !',1600); }
+  g.score+=Math.floor(base*g.combo*g.shipBonus*g.mode.reward);
+  g.kills++; S.totalKills++;
+  verifierRechargeBoosts(g);   /* recharge des boosts au seuil d'ennemis */
+  if(e.type==='boss'){ g.frags+=7; S.secretBossKilled=true; }
+  else g.frags+=e.type==='heavy'?2:1;
+  g.combo=Math.min(g.combo+0.32,6.5); g.comboTimer=90;
+  if(g.combo>(g.comboMax||0)) g.comboMax=g.combo;
+  spawnExplosion(e.x,e.y);
+  sfx(e.type==='boss'?'nuke':'kill');
+  larguerDrop(e,g);
+}
+
+function parts(x,y,col,n){ const m=PART_MULT[(S.prefs&&S.prefs.particules)||'normal']||1; n=Math.max(1,Math.round(n*m)); for(let i=0;i<n;i++) G.particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:12+Math.random()*14,color:col}); }
+function spawnExplosion(x,y,ampleur){ const v=ampleur||18; G.explosions.push({x,y,life:v, maxLife:v}); }
+
+/* Teinte le sprite de munition a la couleur du vaisseau. Sans ca, tous les
+   vaisseaux tiraient exactement le meme projectile des que le palier 45 est
+   debloque : la signature visuelle de chaque appareil disparaissait.
+   Le resultat est mis en cache par couleur, on ne repeint pas a chaque image. */
+const _munTeintes={};
+function munTeintee(img, couleur){
+  const cle=String(couleur);
+  if(_munTeintes[cle]) return _munTeintes[cle];
+  try{
+    const c=document.createElement('canvas');
+    c.width=img.width||128; c.height=img.height||128;
+    const x=c.getContext('2d');
+    if(!x || !x.drawImage || !x.fillRect) return img;
+    x.drawImage(img,0,0,c.width,c.height);
+    x.globalCompositeOperation='source-atop';   /* n'affecte que les pixels du sprite */
+    x.globalAlpha=0.55;
+    x.fillStyle=couleur;
+    x.fillRect(0,0,c.width,c.height);
+    _munTeintes[cle]=c;
+    return c;
+  }catch(e){ return img; }
+}
+
+function draw(){
+  const g=G, ctx=g.ctx;
+  ctx.save();
+  if(g.shake>0) ctx.translate((Math.random()-0.5)*g.shake,(Math.random()-0.5)*g.shake);
+
+  // Fond : on efface, le decor vient du CSS derriere. Voile leger = projectiles lisibles.
+  ctx.clearRect(0,0,g.w,g.h);
+  ctx.fillStyle='rgba(3,3,8,0.42)';
+  ctx.fillRect(0,0,g.w,g.h);
+  ctx.fillStyle='rgba(255,255,255,0.32)';
+  for(let i=0;i<70;i++){ const sx=(i*97+g.frame*0.4)%g.w, sy=(i*59+g.frame*1.35)%g.h; ctx.fillRect(sx,sy,i%7===0?2.2:1.1,i%7===0?2.2:1.1); }
+  ctx.strokeStyle='rgba(153,69,255,0.045)'; ctx.lineWidth=1;
+  for(let y=(g.frame%42);y<g.h;y+=42){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(g.w,y);ctx.stroke(); }
+
+  // Orbs
+  g.orbs.forEach(o=>{
+    const img = o.slot ? ASSETS[o.slot] : (o.t==='noyau'?ASSETS.orbSol:ASSETS.orbSkr);
+    const battement=1+Math.sin(o.pulse||0)*0.10;
+    const t=(o.r||14)*2.6*battement;
+    /* Halo pour reperer le drop dans le feu de l'action */
+    ctx.beginPath(); ctx.arc(o.x,o.y,t*0.55,0,7);
+    ctx.fillStyle=(o.color||'#14F195')+'22'; ctx.fill();
+    if(img){ ctx.drawImage(img, o.x-t/2, o.y-t/2, t, t); }
+    else {
+      ctx.beginPath(); ctx.arc(o.x,o.y,o.r||10,0,7);
+      ctx.fillStyle=o.color||'#14F195'; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=16; ctx.fill(); ctx.shadowBlur=0;
+    }
+  });
+
+  // Enemies — use all variants
+  g.enemies.forEach(e=>{
+    if(e.invisible){                       /* teleporteur en transit : simple halo */
+      ctx.globalAlpha=0.25;
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r*0.7,0,7);
+      ctx.strokeStyle='#c084fc'; ctx.lineWidth=2; ctx.stroke();
+      ctx.globalAlpha=1; return;
+    }
+    const img = e.slot ? ASSETS[e.slot] : null;
+    if(img){
+      const size=e.r*2.6;
+      const rot=(ORIENT[e.slot]||0)*Math.PI/180;
+      ctx.save();
+      if(e.flash>0){ ctx.globalAlpha=0.65; }
+      if(rot){ ctx.translate(e.x,e.y); ctx.rotate(rot); ctx.drawImage(img,-size/2,-size/2,size,size); }
+      else   { ctx.drawImage(img, e.x-size/2, e.y-size/2, size, size); }
+      ctx.restore();
+    } else {
+      ctx.save(); ctx.translate(e.x,e.y);
+      if(e.kind==='minefixe') dessinerMine(ctx, e);
+      else formeFallback(ctx, e.forme||'cercle', e.r, e.color);
+      ctx.restore();
+    }
+    /* Arc de bouclier : montre le cote protege */
+    if(e.kind==='bouclier'){
+      const a=e.angleBouclier||0;
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r+7,a-0.9,a+0.9);
+      ctx.strokeStyle=e.flash>0?'#fff':'#67e8f9'; ctx.lineWidth=3;
+      ctx.shadowColor='#67e8f9'; ctx.shadowBlur=10; ctx.stroke(); ctx.shadowBlur=0;
+    }
+    /* Cible prioritaire : liseré doré */
+    if(e.prime){
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.r+11,0,7);
+      ctx.strokeStyle='#fbbf24'; ctx.lineWidth=2; ctx.stroke();
+    }
+    if(e.hp < e.maxHp){
+      ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(e.x-18, e.y-e.r-14, 36, 4);
+      ctx.fillStyle='#14F195'; ctx.fillRect(e.x-18, e.y-e.r-14, 36*(e.hp/e.maxHp), 4);
+    }
+  });
+
+  /* --- Boss : sprite x3, rotation lente pour le vortex, flash a l'impact --- */
+  if(g.boss){
+    const b=g.boss, d=b.def;
+    /* Sprite selon la phase quand le boss en propose plusieurs */
+    const cle = (d.sprites && d.sprites[Math.min(b.phase,d.sprites.length)-1]) || d.sprite;
+    /* Repli en cascade : phase -> sprite principal -> premiere phase connue.
+       Un boss ne doit jamais s'afficher en losange geometrique. */
+    const img = ASSETS[cle] || ASSETS[d.sprite] ||
+                ((d.sprites||[]).map(k=>ASSETS[k]).find(Boolean)) || null;
+    ctx.save(); ctx.translate(b.x,b.y);
+    if(d.rotation) ctx.rotate(b.angle);                 /* rotation continue : vortex uniquement */
+    if(b.flash>0){ ctx.globalAlpha=0.6; }
+    if(img){ const s=b.r*3; ctx.drawImage(img,-s/2,-s/2,s,s); }
+    else formeFallback(ctx,'losange',b.r*1.4,d.couleur);
+    ctx.restore();
+  }
+
+  /* --- Explosion finale du boss --- */
+  if(g.mortBoss){
+    const m=g.mortBoss, t=1-m.life/m.maxLife, taille=200+t*420;
+    ctx.globalAlpha=Math.max(0, m.life/m.maxLife);
+    const sprite = m.sprite ? ASSETS[m.sprite] : null;
+    if(sprite) ctx.drawImage(sprite, m.x-taille/2, m.y-taille/2, taille, taille);
+    else if(m.life%6===0) spawnExplosion(m.x+(Math.random()-0.5)*140, m.y+(Math.random()-0.5)*140);
+    ctx.globalAlpha=1;
+    m.life--; if(m.life<=0) g.mortBoss=null;
+  }
+
+  if(g.wing) dessinerWingman(g);
+
+  /* --- Projectiles ennemis --- */
+  g.eBullets.forEach(p=>{
+    const img=p.sprite?ASSETS[p.sprite]:null;
+    if(img){
+      const t=p.r*4;
+      ctx.save(); ctx.translate(p.x,p.y);
+      if(p.spin){ p.angle+=p.spin; ctx.rotate(p.angle); }        /* disque tranchant : rotation */
+      else ctx.rotate(p.angle+Math.PI/2);                        /* les autres suivent leur trajectoire */
+      ctx.drawImage(img,-t/2,-t/2,t,t); ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7);
+      ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=12; ctx.fill(); ctx.shadowBlur=0;
+    }
+  });
+
+  // Bullets — alternate cyan / green
+  /* Chaque vaisseau tire differemment : couleur, forme et taille propres.
+     TIRS[i] correspond au vaisseau SHIPS[i]. */
+  const tir = TIRS[loadout.ship] || TIRS[0];
+  /* Palier 45 : munition signature. On remplace le rendu vectoriel par un
+     sprite dedie. Meme degats, meme cadence : seul le visuel change. */
+  /* La demo est la vitrine du hangar : elle doit montrer les 14 signatures
+     de tir. La munition du palier 45, elle, est identique pour tous — on la
+     met de cote le temps du trailer. */
+  const enDemo = !!(g && g.demo);
+  const munSig = (debloque('munition') && !enDemo) ? (ASSETS.projJoueur2 || ASSETS.projJoueur1) : null;
+  if(munSig){
+    /* Le sprite est dessine couche, pointe vers la DROITE, dans un carre de
+       128 px. Il etait affiche tel quel dans un carre de 22 px : projectile
+       a l'horizontale et ecrase. On le redresse d'un quart de tour et on
+       respecte ses proportions. */
+    const sprite = munTeintee(munSig, tir.c);
+    const LONG=30, LARG=13;
+    g.bullets.forEach(b=>{
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(-Math.PI/2);
+      ctx.shadowColor=tir.c; ctx.shadowBlur=tir.glow;
+      ctx.drawImage(sprite, -LONG/2, -LARG/2, LONG, LARG);
+      ctx.restore();
+    });
+  } else
+  g.bullets.forEach((b,i)=>{
+    ctx.save();
+    ctx.shadowColor=tir.c; ctx.shadowBlur=tir.glow;
+    ctx.fillStyle=tir.c;
+
+    if(tir.forme==='trait'){                       /* Seeker One : trait net */
+      ctx.fillRect(b.x-tir.l/2, b.y-tir.h/2, tir.l, tir.h);
+    }
+    else if(tir.forme==='double'){                 /* Phantom : deux fins traits paralleles */
+      ctx.fillRect(b.x-4, b.y-tir.h/2, 2.2, tir.h);
+      ctx.fillRect(b.x+1.8, b.y-tir.h/2, 2.2, tir.h);
+    }
+    else if(tir.forme==='comete'){                 /* Comet : tete ronde et queue degradee */
+      const q=ctx.createLinearGradient(0,b.y-4,0,b.y+18);
+      q.addColorStop(0,tir.c); q.addColorStop(1,'rgba(251,146,60,0)');
+      ctx.fillStyle=q; ctx.fillRect(b.x-2.2, b.y-4, 4.4, 22);
+      ctx.fillStyle=tir.c;
+      ctx.beginPath(); ctx.arc(b.x,b.y-3,4,0,7); ctx.fill();
+    }
+    else if(tir.forme==='losange'){                /* Nebula : cristal allonge */
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y-9); ctx.lineTo(b.x+4.5, b.y);
+      ctx.lineTo(b.x, b.y+9);  ctx.lineTo(b.x-4.5, b.y);
+      ctx.closePath(); ctx.fill();
+    }
+    else if(tir.forme==='eclair'){                 /* King : lance doree epaisse */
+      ctx.fillRect(b.x-2.6, b.y-13, 5.2, 26);
+      ctx.fillStyle='#fff8dc';
+      ctx.fillRect(b.x-1, b.y-11, 2, 22);
+    }
+    else if(tir.forme==='triple'){                 /* Warden : salve serree de trois */
+      for(let k=-1;k<=1;k++) ctx.fillRect(b.x-1.3+k*5, b.y-tir.h/2+Math.abs(k)*3, 2.6, tir.h-Math.abs(k)*5);
+    }
+    else if(tir.forme==='fleche'){                 /* Raptor : chevron agressif */
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y-10); ctx.lineTo(b.x+5.5, b.y+5);
+      ctx.lineTo(b.x, b.y+1);  ctx.lineTo(b.x-5.5, b.y+5);
+      ctx.closePath(); ctx.fill();
+    }
+    else if(tir.forme==='onde'){                   /* Specter : anneau qui se dilate */
+      const r=3.5+((g.frame+i*5)%14)*0.28;
+      ctx.lineWidth=2.4; ctx.strokeStyle=tir.c;
+      ctx.beginPath(); ctx.arc(b.x,b.y,r,0,7); ctx.stroke();
+    }
+    else if(tir.forme==='givre'){                  /* Wraith : eclat a six branches */
+      ctx.lineWidth=1.9; ctx.strokeStyle=tir.c;
+      for(let k=0;k<3;k++){
+        const a=k*Math.PI/3 + (g.frame+i*9)*0.04;
+        ctx.beginPath();
+        ctx.moveTo(b.x-Math.cos(a)*7, b.y-Math.sin(a)*7);
+        ctx.lineTo(b.x+Math.cos(a)*7, b.y+Math.sin(a)*7);
+        ctx.stroke();
+      }
+    }
+    else if(tir.forme==='sceau'){                  /* Sovereign : lance doree a garde */
+      ctx.fillRect(b.x-2.4, b.y-11, 4.8, 22);
+      ctx.fillRect(b.x-6.5, b.y-2, 13, 2.4);
+      ctx.fillStyle='#fffbeb'; ctx.fillRect(b.x-1, b.y-9, 2, 18);
+    }
+    else if(tir.forme==='flamme'){                 /* Inferno : noyau clair, halo braise */
+      const q=ctx.createLinearGradient(0,b.y-9,0,b.y+13);
+      q.addColorStop(0,'#fed7aa'); q.addColorStop(0.45,tir.c); q.addColorStop(1,'rgba(190,18,60,0)');
+      ctx.fillStyle=q;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y-11); ctx.lineTo(b.x+4.2, b.y+2);
+      ctx.lineTo(b.x, b.y+13);  ctx.lineTo(b.x-4.2, b.y+2);
+      ctx.closePath(); ctx.fill();
+    }
+    else {                                         /* Ghost : orbe spectral pulsant */
+      const r=4.5+Math.sin((g.frame+i*7)*0.25)*1.1;
+      ctx.globalAlpha=0.85;
+      ctx.beginPath(); ctx.arc(b.x,b.y,r+3,0,7);
+      ctx.fillStyle='rgba(226,232,240,.28)'; ctx.fill();
+      ctx.globalAlpha=1; ctx.fillStyle=tir.c;
+      ctx.beginPath(); ctx.arc(b.x,b.y,r,0,7); ctx.fill();
+    }
+    ctx.restore();
+  });
+
+  // Explosions — cycle 3 variants
+  g.explosions.forEach(ex=>{
+    const progress = 1 - ex.life/ex.maxLife;
+    const size = 45 + progress * 90;
+    const expImg = (ex.maxLife>=26 ? ASSETS.fxBoss : ex.maxLife>=20 ? ASSETS.fxLarge : ASSETS.fxSmall)
+                 || ASSETS.fxSmall;
+    if(expImg){
+      ctx.globalAlpha = Math.max(0.15, ex.life / ex.maxLife);
+      ctx.drawImage(expImg, ex.x-size/2, ex.y-size/2, size, size);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  // Companion (Ghost ship) — prefer new ghost_v2
+  if(g.companions){
+    const gImg = ASSETS.ship5 || ASSETS.ship1 || ASSETS.ship0;
+    g.companions.forEach(c=>{
+      /* clignote sur la fin pour annoncer la disparition */
+      ctx.globalAlpha = (c.life<90 && Math.floor(c.life/6)%2===0) ? 0.3 : 0.82;
+      if(gImg) ctx.drawImage(gImg, c.x-30, c.y-30, 60, 60);
+      else { ctx.save(); ctx.translate(c.x,c.y); formeFallback(ctx,'triangle',c.r,'#c4b5fd'); ctx.restore(); }
+      ctx.globalAlpha=1;
+    });
+  }
+
+  /* Vaisseau du joueur : un sprite dedie par modele (ship0 a ship5).
+     L'ancien code visait des slots qui n'existent plus, d'ou le vaisseau
+     geometrique de secours affiche a la place du sprite achete. */
+  const p=g.player;
+  const pImg = ASSETS['ship'+loadout.ship] || ASSETS.ship0 || ASSETS.ship2;
+
+  const clignote = g.invuln>0 && Math.floor(g.frame/4)%2===0;
+  if(clignote) ctx.globalAlpha=0.35;
+  /* Palier 120 : traînee de reacteur coloree sous le vaisseau. */
+  if(debloque('trainee')){
+    const t=(TRAINEES.find(x=>x.id===S.trainee)||TRAINEES[0]).c;
+    const l=16+Math.random()*10;
+    ctx.save();
+    ctx.globalAlpha=0.55;
+    const grad=ctx.createLinearGradient(0,p.y+16,0,p.y+16+l);
+    grad.addColorStop(0,t); grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.moveTo(p.x-7,p.y+16); ctx.lineTo(p.x,p.y+16+l); ctx.lineTo(p.x+7,p.y+16); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  if(pImg){
+    /* Livree debloquee par les paliers on-chain : purement visuelle,
+       elle ne change ni les degats ni la taille du vaisseau. */
+    const liv = filtreLivree();
+    if(liv) ctx.filter = liv;
+    ctx.drawImage(pImg, p.x-40, p.y-40, 80, 80);
+    if(liv) ctx.filter = 'none';
+  } else {
+    ctx.save(); ctx.translate(p.x,p.y);
+    ctx.fillStyle='rgba(153,69,255,0.4)'; ctx.beginPath(); ctx.moveTo(-7,14); ctx.lineTo(0,28+Math.random()*6); ctx.lineTo(7,14); ctx.fill();
+    ctx.shadowColor='#9945FF'; ctx.shadowBlur=18;
+    ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(15,14); ctx.lineTo(0,7); ctx.lineTo(-15,14); ctx.closePath();
+    ctx.fillStyle='#c4b5fd'; ctx.fill(); ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(0,-3,5,0,7); ctx.fillStyle='#14F195'; ctx.fill();
+    ctx.restore();
+  }
+
+  dessinerTerminal(g);
+
+  /* --- Nebuleuse : visibilite reduite autour du vaisseau --- */
+  if(g.meca==='brouillard' || (g.event && g.event.id==='blackout')){
+    const p=g.player, r=Math.min(g.w,g.h)*0.40;
+    const halo=ctx.createRadialGradient(p.x,p.y,r*0.35,p.x,p.y,r);
+    halo.addColorStop(0,'rgba(5,4,14,0)');
+    halo.addColorStop(1,'rgba(5,4,14,0.93)');
+    ctx.fillStyle=halo; ctx.fillRect(0,0,g.w,g.h);
+  }
+
+  /* --- Barre de vie du boss (HUD dedie) --- */
+  if(g.boss && !g.boss.entree){
+    const b=g.boss, w=Math.min(g.w-60,340), x=(g.w-w)/2, y=52;
+    ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(x-2,y-2,w+4,14);
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(x,y,w,10);
+    const grad=ctx.createLinearGradient(x,0,x+w,0);
+    grad.addColorStop(0,b.def.couleur); grad.addColorStop(1, b.phase===2?'#ef4444':'#14F195');
+    ctx.fillStyle=grad; ctx.fillRect(x,y,w*Math.max(0,b.hp/b.maxHp),10);
+    ctx.font='bold 11px Orbitron,sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#fff';
+    ctx.fillText(b.def.nom+(b.phase===2?'  \u2022  PHASE 2':''), g.w/2, y-6);
+    ctx.textAlign='left';
+  }
+  /* --- Warning clignotant avant l'entree du boss --- */
+  if(g.bossWarn>0){
+    const al=0.30+0.32*Math.sin(g.frame*0.3);
+    ctx.fillStyle='rgba(239,68,68,'+al.toFixed(2)+')'; ctx.fillRect(0,g.h*0.36,g.w,64);
+    ctx.font='bold 17px Orbitron,sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#fff';
+    ctx.fillText('\u26a0 '+((g.bossDef&&g.bossDef.nom)||'BOSS')+' D\u00c9TECT\u00c9', g.w/2, g.h*0.36+40);
+    ctx.textAlign='left';
+  }
+
+  ctx.globalAlpha=1;
+
+  // Particles
+  g.particles.forEach(pt=>{
+    ctx.globalAlpha=pt.life/26; ctx.fillStyle=pt.color; ctx.fillRect(pt.x,pt.y,2.8,2.8);
+  });
+  ctx.globalAlpha=1; ctx.restore();
+}
+
+function endGame(){
+  G.running=false; cancelAnimationFrame(G.raf); stopMusic();
+  const g=G;
+  /* Le mode demo joue sur des secteurs avances (VORTEX, NEXUS, CHAOS...).
+     Sa fin de partie ecrivait dans la progression : credits, etoiles,
+     contrats, et surtout completedNodes. Resultat : quelques minutes
+     d'inactivite suffisaient a "terminer" le NEXUS et a ouvrir la
+     seconde campagne. On travaille donc sur une copie de l'etat, qu'on
+     jette ensuite : aucune ligne d'endGame ne peut plus fuir, meme
+     celles qu'on ajoutera plus tard. */
+  const _etatAvantDemo = g.demo ? JSON.stringify(S) : null;
+  const _finirDemo = ()=>{
+    if(!_etatAvantDemo) return;
+    /* endGame appelle save() en cours de route : on restaure ET on
+       reecrit, sinon l'etat pollue reste dans le stockage local. */
+    try{ S=JSON.parse(_etatAvantDemo); save(); }catch(e){ LOG.warn('[SEEKER] restauration demo impossible'); }
+  };
+  /* Le resultat s'entend avant de se lire */
+  Audio2.jouerMusique(g.lives>0 ? 'victoire' : 'defaite');
+  if(g.infini){
+    const scoreInfini = g.wave*1000 + Math.max(0,g.lives)*100 + g.score;
+    if(!S.infiniRecord || scoreInfini>S.infiniRecord){
+      S.infiniRecord=scoreInfini; S.infiniVague=g.wave;
+      toast('\ud83c\udfc5 NOUVEAU RECORD \u2022 vague '+g.wave+' \u2022 '+scoreInfini.toLocaleString(),3600);
+    }
+    g.score=scoreInfini;
+  }
+  /* Recompense de mission : uniquement des cr\u00e9dits de jeu */
+  /* Les noyaux ramasses se convertissent en credits de jeu a la fin */
+  const gcG=Math.floor((g.score/6 + g.frags*2.3 + (g.noyaux||0)*220) * g.mode.reward);
+  S.skr+=gcG;
+  if(g.score>S.highScore) S.highScore=g.score;
+  /* La demo joue sur des secteurs avances (VORTEX, NEXUS, CHAOS...) : sans
+     ce garde-fou, elle les marquait comme termines et le joueur se
+     retrouvait avec toute la campagne debloquee sans y avoir touche. */
+  if(!g.demo && !g.infini && !g.arena && !g.coop && S.currentNode>=0 && !S.completedNodes.includes(S.currentNode)){
+    S.completedNodes.push(S.currentNode); toast('Secteur s\u00e9curis\u00e9');
+  }
+  /* --- Contrat de secteur --- */
+  if(g.contrat && g.lives>0){
+    /* Un contrat rempli en Extreme reste a decrocher en Normal et
+       inversement : chaque cran a sa propre recompense. */
+    const cle=S.currentNode+':'+(g.contrat.difficulte||'normal');
+    const dejaFait=(S.contratsRemplis||[]).includes(cle);
+    if(contratRempli(g)){
+      if(!dejaFait) S.skr+=g.contrat.gc;
+      S.contratsRemplis=(S.contratsRemplis||[]).includes(cle)
+        ? S.contratsRemplis : (S.contratsRemplis||[]).concat(cle);
+      setTimeout(()=>toast('\u2713 CONTRAT REMPLI \u2022 '+g.contrat.def.nom+(dejaFait?'':' \u2022 +'+g.contrat.gc+' GC'),3400),700);
+      Audio2.jouerSfx('levelup');
+    } else {
+      setTimeout(()=>toast('\u2717 Contrat non rempli \u2022 '+g.contrat.def.nom,2600),700);
+    }
+  }
+
+  /* --- Exploits : records personnels et secrets --- */
+  if((g.comboMax||0) > (S.comboMax||0)) S.comboMax=g.comboMax;
+  if(g.lives>0 && !g.infini && !g.arena){
+    if(!g.viePerdue) S.sansDegat=(S.sansDegat||0)+1;
+    if(BOSS_DEFS[S.currentNode] && !g.bonusUtilise) S.sansBonus=(S.sansBonus||0)+1;
+    if(!S.prefs.son && !S.prefs.musique) debloquerSecret('silence');
+    if(S.currentNode===9) debloquerSecret('zerog');
+  }
+  verifierVaisseaux();
+  /* Etoiles : on garde la meilleure difficulte reussie sur ce noeud */
+  if(g.lives>0) verifierDeblocage();
+  /* Le Nexus tombe : generique de fin */
+  if(g.lives>0 && (S.currentNode===21 || (S.currentNode===12 && !boucleDebloquee(4)))){
+    S.jeuTermine=true; save();
+    setTimeout(()=>{ document.getElementById('modal-result').classList.remove('show'); lancerFinal(); }, 2200);
+  }
+  if(g.lives>0 && EPILOGUES[S.currentNode] && !(S.epVues||[]).includes(S.currentNode)){
+    S.epVues=(S.epVues||[]).concat(S.currentNode);
+    setTimeout(()=>afficherTransmission('GENESIS', EPILOGUES[S.currentNode], null, '#c4b5fd'), 1500);
+  }
+  if(g.lives>0 && !g.infini && S.currentNode>=0){
+    const d=DIFFICULTES[loadout.difficulte]||DIFFICULTES.normal;
+    if(!S.nodeStars) S.nodeStars={};
+    if((S.nodeStars[S.currentNode]||0) < d.etoiles){
+      S.nodeStars[S.currentNode]=d.etoiles;
+      toast('\u2b50 Record : '+'\u2605'.repeat(d.etoiles)+' en '+d.nom,3000);
+    }
+  }
+  document.getElementById('res-icon').innerHTML = g.lives>0 ? ico('uiVictoire','🏆',52) : ico('uiDefaite','💥',52);
+  document.getElementById('res-title').textContent=g.lives>0?'MISSION RÉUSSIE':'MISSION FAILED';
+  const sousTitre=NODES.find(n=>n.id===S.currentNode)?.title||'';
+  /* L'indicatif de pilote, debloque a 60 TX, s'affiche avec le secteur. */
+  document.getElementById('res-sub').textContent =
+    (debloque('indicatif') && S.indicatif) ? ('\u00ab '+S.indicatif+' \u00bb \u2022 '+sousTitre) : sousTitre;
+  document.getElementById('res-score').textContent=g.score;
+  document.getElementById('res-kills').textContent=g.kills;
+  document.getElementById('res-frags').textContent=g.frags;
+  document.getElementById('res-wave').textContent=g.wave;
+  document.getElementById('res-reward').textContent=`+${gcG.toLocaleString()} GC`;
+  if(NODES.find(x=>x.id===S.currentNode&&x.type==='hub')){
+    S.charges={ mitra:2, nuke:1, ghost:1 };      /* QG Terre : reapprovisionnement complet */
+    toast('\ud83d\udee0\ufe0f R\u00e9approvisionnement complet');
+  }
+  if(g.lives>0){ Audio2.jouerSfx('victory'); haptique('victoir
