@@ -7,9 +7,9 @@ Les images et sons en base64 sont remplacés par `<retiré>`.
 |---|---|---|
 | `1-interface.html` | 1102 | 67 Ko |
 | `2-donnees.js` | 2109 | 111 Ko |
-| `3-solana.js` | 1376 | 73 Ko |
-| `4-moteur.js` | 2202 | 102 Ko |
-| `5-traductions.js` | 725 | 53 Ko |
+| `3-solana.js` | 1403 | 75 Ko |
+| `4-moteur.js` | 2207 | 102 Ko |
+| `5-traductions.js` | 726 | 53 Ko |
 | `6-outils.js` | 1050 | 58 Ko |
 
 ## À lire selon le sujet

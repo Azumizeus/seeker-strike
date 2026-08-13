@@ -152,11 +152,16 @@ raison :
 |---|---|---|
 | `BH_VIE` | 52 s | 150 blocs ≈ 60 s, moins 1 à 3 s car le blockhash arrive déjà vieux, moins une marge d'incertitude |
 | `DELAI_SIGNATURE` | 40 s | **Borné par la physique** : au-delà de `BH_VIE − DELAI_DIFFUSION`, la signature serait rejetée de toute façon. Attendre plus ne rend pas service, ça fait signer pour rien |
-| `DELAI_DIFFUSION` | 7 s | Reprises de `diffuser()` (0,8 + 1,6 + 2,4 s) et allers-retours réseau |
+| `DELAI_DIFFUSION` | 7 s | Reprises de `diffuser()` (0,8 + 1,6 + 2,4 s) et allers-retours réseau. **C'était une estimation** ; `diffuser(brut, échéance)` en fait désormais une borne : passé l'échéance, réessayer est garanti perdant, on rend la main |
 | `BH_COUSSIN` | 3 s | Réserve. Sans elle le pire cas tombait à l'égalité exacte : une diffusion à 7,5 s au lieu de 7 faisait expirer la transaction |
 | `DELAI_RECONNEXION` | 30 s | **Hors budget** : `amorcerWallet()` retrouve le wallet *avant* de prendre le blockhash. Compté après, ces 30 s portaient le pire cas à 77 s |
 
 Pire cas : 2 + 40 + 7 = 49 s sur 52 disponibles. **3 s de coussin garanties.**
+
+Le 2 s est la fenêtre de cache réellement utilisable une fois tout déduit
+(`BH_VIE − DELAI_SIGNATURE − DELAI_DIFFUSION − BH_COUSSIN`). En pratique
+chaque envoi signé repart d'un blockhash frais — c'est assumé. Le double appui
+est bloqué par `CHAINE.enCours`, posé avant tout `await`, pas par ce cache.
 
 Ne touchez à aucune de ces valeurs isolément : elles forment un budget, et
 `tests/wallet_sc.js` échoue si la somme ne tient plus.

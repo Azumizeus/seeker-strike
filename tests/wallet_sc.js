@@ -120,9 +120,15 @@ const fenetreUtile = Math.min(BH_FENETRE, BH_VIE - DELAI_SIGNATURE - DELAI_DIFFU
    des appels RPC et laisser le joueur signer tranquillement, on choisit le
    joueur. Le double appui n'est pas protege par le cache mais par le verrou
    CHAINE.enCours, pose avant tout `await` — c'est teste plus haut. */
-(fenetreUtile <= 0)
-  ? ok('chemin signature : blockhash frais a chaque envoi, aucun risque de peremption')
-  : ok('fenetre residuelle de '+(fenetreUtile/1000)+' s, sans risque');
+(fenetreUtile <= 3000)
+  ? ok('fenetre de cache reelle : '+(fenetreUtile/1000)+' s (coussin deduit) — chaque envoi signe repart quasi toujours d\'un blockhash frais')
+  : ko('fenetre annoncee trop large : '+(fenetreUtile/1000)+' s');
+/* Le libelle du code doit dire la meme chose que le calcul. */
+const srcF=require('fs').readFileSync(require('path').join(__dirname,'../game/index_v37.html'),'utf8');
+(srcF.indexOf('BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION - BH_COUSSIN')>=0)
+  ? ok('le commentaire du code inclut bien BH_COUSSIN dans la formule') : ko('formule du commentaire incomplete');
+(srcF.indexOf('52-40-7-3 = 2 s')>=0)
+  ? ok('le chiffre annonce dans le code correspond au calcul reel') : ko('chiffre du commentaire decale');
 (typeof DELAI_DIFFUSION==='number' && DELAI_DIFFUSION>=5000)
   ? ok('budget de diffusion pris en compte : '+(DELAI_DIFFUSION/1000)+' s (reprises 429 + reseau)') : ko('DELAI_DIFFUSION absent ou trop court');
 (BH_VIE<=52000)
@@ -180,6 +186,43 @@ const srcB=require('fs').readFileSync(require('path').join(__dirname,'../game/in
   ? ok('timeout du wallet : le RPC n\'est pas ecarte a tort') : ko('un joueur lent ferait ecarter Helius pour la session');
 (estRpcCasse(new Error('gateway timeout'))===true)
   ? ok('vrai timeout reseau : toujours reconnu comme panne RPC') : ko('timeout reseau ignore');
+
+/* ---- 6ter. Un seul appel au wallet, meme si deux le demandent ---- */
+let connexions=0;
+window.solana = { publicKey:new FauxPK(S.addressComplete),
+  connect: async()=>{ connexions++; await pause(30); return window.solana; },
+  signTransaction: async t=>t };
+_providerExt=null; _providerEnCours=null; S.walletId='phantom'; S.walletType='ext';
+delete window.solana.publicKey;                 /* force le passage par connect() */
+window.solana.publicKey=undefined;
+const [pa,pb] = await Promise.all([retrouverProvider(), retrouverProvider()]);
+(connexions<=1) ? ok('deux demandes simultanees : une seule connexion au wallet ouverte ('+connexions+')')
+                : ko('DOUBLE CONNEXION : '+connexions+' appels a connect()');
+(pa===pb) ? ok('les deux appelants recoivent la meme promesse') : ko('promesses distinctes');
+(_providerEnCours===null) ? ok('le memo est relache une fois l\'appel termine') : ko('memo bloque, plus aucune reconnexion possible');
+window.solana.publicKey=new FauxPK(S.addressComplete);
+
+/* ---- 6quater. La diffusion s'arrete a l'echeance ---- */
+let tentatives=0;
+const envoiSature = async()=>{ tentatives++; throw new Error('429 Too Many Requests'); };
+S.rpcPerso=''; reconstruirePool();
+/* rpcSuivant() reconstruit la connexion : le stub doit survivre a la rotation */
+CHAINE.mod={ Connection:function(u){ this.url=u;
+  this.getLatestBlockhash=async()=>({blockhash:'BH'});
+  this.sendRawTransaction=(...a)=>envoiSature(...a); } };
+CHAINE.connexion=new CHAINE.mod.Connection('test');
+const t0d=Date.now();
+try{ await diffuser(new Uint8Array([1]), Date.now()-1); ko('aucune erreur alors que l\'echeance est depassee'); }
+catch(e){ ok('echeance depassee : la diffusion abandonne au lieu d\'epuiser les essais'); }
+(tentatives<=1) ? ok('une seule tentative apres l\'echeance, pas quatre ('+tentatives+')') : ko('tentatives inutiles : '+tentatives);
+(Date.now()-t0d < 1500) ? ok('abandon immediat ('+(Date.now()-t0d)+' ms), le joueur est prevenu tout de suite') : ko('trop lent');
+(/expir/.test(causeLisible(new Error('blockhash not found : echeance depassee'))))
+  ? ok('message : "'+causeLisible(new Error('blockhash not found : echeance depassee'))+'"') : ko('message obscur');
+
+/* Sans echeance, le comportement d'origine est preserve */
+tentatives=0;
+try{ await diffuser(new Uint8Array([1])); }catch(e){}
+(tentatives>=2) ? ok('sans echeance : les reprises 429 fonctionnent toujours ('+tentatives+' tentatives)') : ko('reprises cassees : '+tentatives);
 
 /* ---- 7. Timeout : le message depend de qui diffuse ---- */
 CHAINE.canalAuto=false;

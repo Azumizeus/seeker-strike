@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 3-solana.js
    Integration Solana : wallet, signatures, RPC, paliers
-   Lignes 2109 a 3484 du script (game/index_v37.html)
+   Lignes 2109 a 3511 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
@@ -189,9 +189,11 @@ const DELAI_DIFFUSION = 7000;
    jamais consomme par le calcul de fraicheur. */
 const BH_COUSSIN = 3000;
 /* Budget quand une signature est attendue : la fenetre de cache reellement
-   utilisable tombe a BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION, soit 3 s.
-   C'est peu, et c'est voulu : le cache n'a plus qu'un role, absorber un
-   double appui. Tout le reste repart d'un blockhash frais. */
+   utilisable vaut
+     BH_VIE - DELAI_SIGNATURE - DELAI_DIFFUSION - BH_COUSSIN = 52-40-7-3 = 2 s.
+   C'est infime, et c'est voulu : en pratique chaque envoi signe repart d'un
+   blockhash frais. Le double appui, lui, est bloque par CHAINE.enCours pose
+   avant tout `await`, pas par ce cache. */
 /* `marge` = temps qui va encore s'ecouler avant la diffusion, typiquement
    l'attente de signature. Un blockhash de 39 s garde en cache, suivi de 45 s
    de signature, arrivait perime sur le reseau : on en reprend un frais si le
@@ -220,8 +222,13 @@ async function blockhashFrais(marge){
   }
   throw derniere || new Error('AUCUN_RPC');
 }
-/* Diffusion avec reprise : meme logique que pour le blockhash. */
-async function diffuser(brut){
+/* Diffusion avec reprise : meme logique que pour le blockhash.
+   `echeance` est l'instant au-dela duquel le blockhash sera expire. Passe ce
+   point, chaque nouvelle tentative est GARANTIE perdante : elle ne fait que
+   retarder le message d'erreur. On rend la main au lieu d'epuiser les essais.
+   DELAI_DIFFUSION reste une estimation du temps de diffusion — c'est cette
+   echeance qui en fait une borne. */
+async function diffuser(brut, echeance){
   let derniere=null;
   const essais = Math.max(4, RPC_DEVNET.length+2);
   for(let essai=0; essai<essais; essai++){
@@ -230,6 +237,7 @@ async function diffuser(brut){
       derniere=e;
       if(!estRpcCasse(e)) throw e;
       if(!estSature(e)) marquerRpcMort(e&&e.message);
+      if(echeance && Date.now() > echeance) throw new Error('blockhash not found : echeance depassee');
       if(!rpcSuivant()) throw new Error('AUCUN_RPC');
       await pause(estSature(e) ? 800*(essai+1) : 150);
     }
@@ -273,7 +281,18 @@ function causeLisible(e){
 /* Retrouve le provider d'extension apres un rechargement de page.
    Phantom et Backpack acceptent une reconnexion sans interaction quand le
    site a deja ete autorise (onlyIfTrusted). */
+/* Un appel en vol est partage. `avecDelai` perd la course mais N'ANNULE PAS
+   la promesse : sans ce memo, amorcerWallet() puis signerEtEnvoyer() ouvraient
+   DEUX connexions au wallet, et la premiere pouvait renseigner _providerExt
+   puis ecraser S.addressComplete bien apres l'echec de l'envoi. */
+let _providerEnCours = null;
 async function retrouverProvider(){
+  if(_providerExt) return _providerExt;
+  if(_providerEnCours) return _providerEnCours;
+  _providerEnCours = _retrouverProviderReel().finally(()=>{ _providerEnCours = null; });
+  return _providerEnCours;
+}
+async function _retrouverProviderReel(){
   if(_providerExt) return _providerExt;
   if(!S.walletReel || S.walletType==='mwa') return null;
   /* Sans filtre, un joueur Solflare dont l'extension tarde a s'injecter se
@@ -374,7 +393,9 @@ async function signerEtEnvoyer(tx){
     if(typeof p.signTransaction==='function'){
       CHAINE.canalAuto = false;              /* c'est nous qui diffusons */
       const signee = await avecDelai(p.signTransaction(tx), DELAI_SIGNATURE, 'signature');
-      sig = await diffuser(signee.serialize());
+      /* L'echeance part de MAINTENANT : le temps passe a signer est deja
+         consomme, il reste au plus DELAI_DIFFUSION pour atteindre le reseau. */
+      sig = await diffuser(signee.serialize(), Date.now() + DELAI_DIFFUSION);
       LOG.log('[SEEKER] signature via wallet puis diffusion devnet');
     } else if(typeof p.signAndSendTransaction==='function'){
       CHAINE.canalAuto = true;               /* le wallet diffuse lui-meme */
@@ -513,8 +534,14 @@ async function envoyerTxSeeker(action){
       LOG.log('[SEEKER] adresse convertie en base58');
     }
     const joueur = new PublicKey(adresse);
-    /* Reconnexion d'abord, blockhash ensuite : voir amorcerWallet(). */
-    await amorcerWallet();
+    /* Reconnexion d'abord, blockhash ensuite : voir amorcerWallet().
+       Si elle echoue sur une extension, inutile d'aller plus loin : le budget
+       du blockhash serait deja creve par la reconnexion que signerEtEnvoyer
+       tenterait ensuite. On rend la main tout de suite, sans appel RPC. */
+    if(!(await amorcerWallet()) && S.walletType==='ext'){
+      CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
+      return null;
+    }
     /* La transaction va attendre la signature du joueur : on demande un
        blockhash qui sera encore valide a ce moment-la. */
     const blockhash = await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION);

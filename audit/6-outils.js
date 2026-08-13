@@ -1,7 +1,7 @@
 /* ============================================================
    SEEKER STRIKE v4.4 - 6-outils.js
    Traduction, ecrans, reglages, easter eggs
-   Lignes 6409 a 7458 du script (game/index_v37.html)
+   Lignes 6442 a 7491 du script (game/index_v37.html)
    Genere par game/build_audit.py — NE PAS EDITER A LA MAIN.
    La source de verite est game/index_v37.html.
    ============================================================ */
