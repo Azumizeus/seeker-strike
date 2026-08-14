@@ -28,3 +28,13 @@ docs/_test.*
 *.avant-*
 .DS_Store
 revue-assets test.csv
+
+# Documents de travail : utiles en local, sans interet dans un depot public
+CLAUDE.md
+SUIVI-CORRECTIONS.md
+docs/BRIEF-*.md
+docs/PLAN-TEST-FINAL.md
+docs/PASSER-EN-MAINNET.md
+docs/historique/
+docs/chantiers/
+docs/comm/
