@@ -5944,8 +5944,20 @@ function draw(){
   if(g.wing) dessinerWingman(g);
 
   /* --- Projectiles ennemis --- */
+  /* TRAITEMENT DANGER — la regle de lisibilite du jeu.
+     Tout projectile ennemi porte un halo sombre dessous et un coeur blanc
+     dessus. Aucun projectile joueur n'en a. C'est la FORME qui dit
+     « ennemi », jamais la teinte : les 13 vaisseaux couvrent deja toute la
+     roue chromatique, aucune couleur n'est disponible pour le danger.
+       - le halo sombre : lisible sur n'importe quel fond, clair ou charge
+       - le coeur blanc : marque le point exact a esquiver
+     Marche aussi pour les joueurs daltoniens, et restera vrai le jour ou tu
+     ajouteras un 15e vaisseau. Applique aux DEUX branches (sprite et repli) :
+     une regle de lisibilite avec un trou ne vaut rien. */
   g.eBullets.forEach(p=>{
     const img=p.sprite?ASSETS[p.sprite]:null;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r+2, 0, 7);
+    ctx.fillStyle='rgba(5,2,10,.80)'; ctx.fill();
     if(img){
       const t=p.r*4;
       ctx.save(); ctx.translate(p.x,p.y);
@@ -5953,9 +5965,13 @@ function draw(){
       else ctx.rotate(p.angle+Math.PI/2);                        /* les autres suivent leur trajectoire */
       ctx.drawImage(img,-t/2,-t/2,t,t); ctx.restore();
     } else {
+      /* Repli sans sprite. Le shadowBlur a saute : il coutait cher par
+         projectile et le halo sombre fait mieux le travail. */
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7);
-      ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=12; ctx.fill(); ctx.shadowBlur=0;
+      ctx.fillStyle=p.color; ctx.fill();
     }
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.7, p.r*0.34), 0, 7);
+    ctx.fillStyle='rgba(255,255,255,.90)'; ctx.fill();
   });
 
   // Bullets — alternate cyan / green
@@ -6489,6 +6505,61 @@ async function payerEnSKR(montant, etiquette){
   }finally{ CHAINE.enCours=false; }
 }
 
+/* Paiement en SOL : transfert natif vers la tresorerie + memo de tracabilite.
+   Meme contrat de retour que payerEnSKR : la signature, ou null avec la cause
+   dans CHAINE.derniereErreur.
+   Pourquoi elle existe : l'achat de vaisseau en SOL ne construisait AUCUNE
+   transaction. Il faisait S.sol -= prix, or depuis SOL-1 S.sol est le solde
+   reel du wallet, relu sur la chaine par rafraichirSoldes() dans la seconde
+   qui suit. La soustraction etait donc effacee et les vaisseaux gratuits. */
+async function payerEnSOL(montant, etiquette){
+  if(!S.walletReel || !S.addressComplete){ CHAINE.derniereErreur='wallet non connecte'; return null; }
+  if(!(montant>0)){ CHAINE.derniereErreur='montant nul'; return null; }
+  /* Le verrou se pose AVANT tout `await`. Sinon deux appuis rapproches
+     franchissent tous les deux le test pendant le chargement de web3.js,
+     et DEUX transactions partent pour un seul geste. */
+  if(CHAINE.enCours){ CHAINE.derniereErreur='transaction deja en cours'; return null; }
+  CHAINE.enCours=true;
+  try{
+    const w3=await chargerWeb3();
+    if(!w3){ CHAINE.derniereErreur='web3.js indisponible'; return null; }
+    const { PublicKey, Transaction, TransactionInstruction, SystemProgram } = w3;
+    const parSol = w3.LAMPORTS_PER_SOL || 1e9;
+    const joueur = new PublicKey(normaliserAdresse(S.addressComplete, PublicKey));
+    /* Convention du fichier : tout ce qui n'est pas 'mwa' est une extension. */
+    if(!(await amorcerWallet()) && S.walletType!=='mwa'){
+      CHAINE.derniereErreur='session wallet perdue, reconnecte-toi';
+      return null;
+    }
+    const tx = new Transaction({ feePayer:joueur,
+      recentBlockhash: await blockhashFrais(DELAI_SIGNATURE + DELAI_DIFFUSION) });
+    tx.add(SystemProgram.transfer({ fromPubkey:joueur,
+      toPubkey:new PublicKey(TRESORERIE.adresse),
+      lamports:Math.round(montant*parSol) }));
+    /* Trace lisible de l'achat, comme pour la Seeker Task et le paiement SKR */
+    tx.add(new TransactionInstruction({
+      keys:[{ pubkey:joueur, isSigner:true, isWritable:false }],
+      programId:new PublicKey(CHAINE.memoProgram),
+      data:(typeof Buffer!=='undefined'&&Buffer.from)
+             ? Buffer.from('seeker-strike:'+etiquette,'utf8')
+             : new TextEncoder().encode('seeker-strike:'+etiquette)
+    }));
+    const sig = await signerEtEnvoyer(tx);
+    if(sig){
+      LOG.log('[SEEKER] paiement SOL : '+sig);
+      if(!S.signatures) S.signatures=[];
+      S.signatures.unshift({ action:etiquette, sig, t:Date.now() });
+      S.signatures=S.signatures.slice(0,20);
+    }
+    return sig||null;
+  }catch(e){
+    CHAINE.derniereErreur=causeLisible(e)||'erreur inconnue';
+    if(/blockhash not found|block height exceeded/i.test(String((e&&(e.message||e))||''))) invaliderBlockhash();
+    LOG.warn('[SEEKER] paiement SOL refuse : '+CHAINE.derniereErreur);
+    return null;
+  }finally{ CHAINE.enCours=false; }
+}
+
 /* Don en SOL : un simple transfert natif, signe par le joueur. */
 async function donnerSOL(montant){
   if(!S.connected) return toast('Connecte ton wallet d\'abord', 2400);
@@ -6650,13 +6721,30 @@ async function unlockShip(id, monnaie){
     Audio2.jouerSfx('levelup'); haptique('victoire');
     toast('\ud83d\udee0\ufe0f '+sh.name+' d\u00e9bloqu\u00e9 \u2022 -'+prix.toLocaleString()+' SKR', 2800);
   } else {
+    /* Paiement en SOL : un vrai transfert natif vers la tresorerie.
+       Avant, cette branche se contentait de S.sol -= prix. Comme S.sol est le
+       solde reel du wallet, rafraichirSoldes() le remettait a sa vraie valeur
+       aussitot : le vaisseau etait debloque sans qu'un seul lamport bouge.
+       Desormais rien n'est accorde tant que la signature n'est pas revenue. */
     const prix=sh.sol||0;
+    if(!prix) return toast('Ce vaisseau ne s’achète pas en SOL', 2400);
     if(!S.connected) return toast('Connecte ton wallet pour payer en SOL', 2600);
-    if(S.sol<prix) return toast('Solde insuffisant : il te faut '+prix+' SOL', 2800);
-    S.sol=+(S.sol-prix).toFixed(4);
-    S.unlocked.push(id); addTx('ship:'+id); creditTX(1);
+    if(!S.walletReel) return toast('Le paiement SOL demande un vrai wallet', 2800);
+    /* On relit le solde avant de proposer la signature : S.sol peut dater. */
+    const solde = await lireSoldeSOL();
+    if(solde < prix) return toast('Solde insuffisant : il te faut '+prix+' SOL', 2800);
+    toast('✍️ Signe le paiement de '+prix+' SOL…', 3000);
+    const sig = await payerEnSOL(prix, 'ship:'+id);
+    if(!sig){
+      const cause = CHAINE.derniereErreur ? ' • '+String(CHAINE.derniereErreur).slice(0,70) : '';
+      CHAINE.derniereErreur=null;
+      return toast('❌ Paiement échoué'+cause, 5000);
+    }
+    S.unlocked.push(id);
+    creditTX(1);
+    rafraichirSoldes();          /* le solde affiche doit refleter le debit reel */
     Audio2.jouerSfx('levelup'); haptique('victoire');
-    toast('\ud83d\udee0\ufe0f '+sh.name+' d\u00e9bloqu\u00e9 \u2022 -'+prix+' SOL', 2800);
+    toast('🛠️ '+sh.name+' débloqué • -'+prix+' SOL', 2800);
   }
   save(); renderShips(); ui();
 }
@@ -7094,6 +7182,7 @@ const EN = {
 "SEEKER TASK": "SEEKER TASK",
 "Campagne": "Campaign",
 "Genesis Complete": "Genesis Complete",
+"Chaos Complete": "Chaos Complete",
 "Chasseur de boss": "Boss Hunter",
 "Tueur de titans": "Titan Slayer",
 "Perfectionniste": "Perfectionist",
@@ -7459,6 +7548,7 @@ const EN = {
 "15 TX on-chain • activité Solana": "15 on-chain TX • Solana activity",
 "5 secteurs sécurisés": "5 sectors secured",
 "12 secteurs sécurisés": "12 sectors secured",
+"22 secteurs sécurisés": "22 sectors secured",
 "Vortex, Corruption, Nexus": "Vortex, Corruption, Nexus",
 "Les 10 boss du jeu terrassés": "All 10 bosses defeated",
 "20 étoiles cumulées": "20 stars earned",
@@ -8514,6 +8604,9 @@ function listeQuetes(){
                             skr:p.gc, sp:!!p.sp, palier:p })),
     {id:'camp5',    n:'Campagne',          d:'5 secteurs s\u00e9curis\u00e9s',      c:(S.completedNodes||[]).length, m:5,  skr:250},
     {id:'camp12',   n:'Genesis Complete',  d:'12 secteurs s\u00e9curis\u00e9s',     c:(S.completedNodes||[]).length, m:12, skr:1200},
+    /* Carte entiere : NODES va de 0 (QG) a 21, soit 22 noeuds. C'est le
+       plafond reel de completedNodes, donc le succes de completion totale. */
+    {id:'camp22',   n:'Chaos Complete',    d:'22 secteurs s\u00e9curis\u00e9s',     c:(S.completedNodes||[]).length, m:22, skr:3000},
     {id:'boss3',    n:'Chasseur de boss',  d:'Vortex, Corruption, Nexus',   c:[4,7,12].filter(x=>(S.completedNodes||[]).includes(x)).length, m:3, skr:900},
     {id:'boss7',    n:'Tueur de titans',   d:'Les 10 boss du jeu terrass\u00e9s',
      c:[4,5,6,7,11,12,16,18,20,21].filter(x=>(S.completedNodes||[]).includes(x)).length, m:10, skr:2600},

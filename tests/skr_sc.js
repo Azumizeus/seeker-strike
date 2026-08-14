@@ -83,10 +83,22 @@ await unlockShip(3,'skr');
 (!S.unlocked.includes(3) && !tx) ? ok('mode simulation : paiement SKR bloque proprement') : ko('simulation : transfert tente');
 S.walletReel=true;
 
-/* le SOL fonctionne toujours */
-S.sol=1; CHAINE.enCours=false;
+/* ---- SOL-5 : l'achat en SOL construit une VRAIE transaction ----
+   L'ancienne version de ce test verifiait S.sol-0.85, c'est-a-dire le bug
+   lui-meme : une soustraction locale sur un solde relu sur la chaine juste
+   apres. On verifie maintenant ce qui compte : la transaction part, elle
+   porte un memo, et le vaisseau n'est accorde qu'ensuite. */
+S.sol=1; tx=null; CHAINE.enCours=false;
 await unlockShip(2,'sol');
-(S.unlocked.includes(2) && Math.abs(S.sol-0.85)<1e-6) ? ok('achat en SOL intact : -0.15 SOL') : ko('SOL : '+S.sol);
+(tx && tx.instr.some(i=>i.type==='transfer')) ? ok('achat en SOL : transfert natif construit') : ko('aucun transfert SOL dans la transaction');
+(tx && tx.instr.some(i=>i.type==='memo')) ? ok('memo de tracabilite joint a l\'achat SOL') : ko('memo absent de l\'achat SOL');
+(S.unlocked.includes(2)) ? ok('Comet debloque apres paiement SOL') : ko('vaisseau non debloque apres signature');
+
+/* sans wallet reel : rien ne part, rien n'est accorde */
+S.walletReel=false; tx=null; CHAINE.enCours=false;
+await unlockShip(4,'sol');
+(!S.unlocked.includes(4) && !tx) ? ok('mode simulation : achat SOL bloque proprement') : ko('simulation : transfert SOL tente');
+S.walletReel=true;
 
 /* ---- 4. Le gameplay reste en GC ---- */
 (typeof S.skr==='number' && S.skr>=0) ? ok('les GC restent une monnaie locale distincte du token SKR') : ko('GC casses');

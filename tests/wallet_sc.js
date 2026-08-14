@@ -232,8 +232,14 @@ try{ await diffuser(new Uint8Array([1])); }catch(e){}
 const srcW=require('fs').readFileSync(require('path').join(__dirname,'../game/index_v37.html'),'utf8');
 (srcW.indexOf("!(await amorcerWallet()) && S.walletType==='ext'")<0)
   ? ok('garde d\'abandon : plus de test sur la valeur litterale ext') : ko('garde muet si walletType vaut autre chose que ext');
-((srcW.match(/!\(await amorcerWallet\(\)\) && S\.walletType!=='mwa'/g)||[]).length===3)
-  ? ok('les 3 points d\'envoi utilisent la convention !== mwa') : ko('convention incoherente entre les points d\'envoi');
+/* Compter les points d'envoi en dur cassait ce test a chaque ajout : SOL-5
+   en a introduit un 4e (payerEnSOL). Ce qui compte n'est pas leur nombre,
+   c'est qu'ils suivent TOUS la convention. On verifie donc la proportion. */
+const gardesTotal = (srcW.match(/await amorcerWallet\(\)/g)||[]).length;
+const gardesOk    = (srcW.match(/!\(await amorcerWallet\(\)\) && S\.walletType!=='mwa'/g)||[]).length;
+(gardesTotal>=3 && gardesOk===gardesTotal)
+  ? ok('les '+gardesOk+' points d\'envoi utilisent la convention !== mwa')
+  : ko('convention incoherente entre les points d\'envoi : '+gardesOk+'/'+gardesTotal);
 
 /* ---- 7. Timeout : le message depend de qui diffuse ---- */
 CHAINE.canalAuto=false;

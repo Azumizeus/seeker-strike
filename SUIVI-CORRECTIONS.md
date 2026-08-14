@@ -118,6 +118,7 @@ Choisis-en un et aligne tout : soumission, README, posts X, bio.
 | ID | Gravité | Quoi | Statut |
 |---|---|---|---|
 | `SOL-1` | 🔴 | ~~Solde SOL devnet non affiché~~ — **cause** : `getBalance` n'était appelé **nulle part**. `S.sol` partait de 0 et n'était que décrémenté par les achats, jamais lu sur la chaîne. Corrigé. | **fait** |
+| `SOL-5` | 🔴 | **L'achat de vaisseau en SOL ne faisait aucune transaction.** `unlockShip()` branche `sol` : `S.sol -= prix` puis déblocage. Or depuis `SOL-1`, `S.sol` est le solde réel du wallet, que `rafraichirSoldes()` relit dans la seconde — la soustraction était effacée et **les vaisseaux étaient gratuits**. Corrigé le 14/08 : `payerEnSOL()` (transfert natif vers la trésorerie + mémo), rien n'est accordé sans signature. Le shop n'était pas touché (tout en SKR). `skr_sc.js` vérifiait `S.sol-0.85`, c'est-à-dire le bug lui-même — réécrit pour vérifier la transaction. 118/118 verts. | **fait** · reste le test manuel sur devnet |
 | `SOL-2` | 🟡 | Wrapper APK (WebView / Capacitor) pour le dApp Store. KYC, ~0,2 SOL, review 3-5 jours ouvrés. | à faire |
 | `SOL-3` | ⚪ | Passage mainnet — voir `docs/PASSER-EN-MAINNET.md`. | plus tard |
 
@@ -156,7 +157,7 @@ Choisis-en un et aligne tout : soumission, README, posts X, bio.
 | `PRJ-1` | 🟠 | **Le dossier finit par une espace** (`...NITRO-01 `). Casse git et les outils via le pont. Renommer, puis reconnecter le dossier. | à faire |
 | `PRJ-2` | 🟡 | Trier les assets et sprites non utilisés (`_backup/`, `sources/`). Les classer, pas les jeter. | à faire |
 | `PRJ-3b` | ⚪ | Restent `docs/_test.tmp` et `docs/_test.txt`. Doublon `.DS_Store` dans le `.gitignore`. | à faire |
-| `PRJ-4` | 🟡 | **`CLAUDE.md` périmé** : dit « v3.5 » (le jeu est en v4.4), « prochaine tâche : test du 13 août » (passé), note `ss_v2` fausse. | à faire |
+| `PRJ-4` | 🟡 | **`CLAUDE.md` périmé** : disait « v3.5 », wallet mock, tâche du 13 août, note `ss_v2` fausse. Réécrit le 14/08/2026, chiffres relus dans le code. Ancienne version dans `docs/historique/CLAUDE-v3.5-perime.md`. | **fait** |
 | `PRJ-5` | 🟡 | ~~`publier.sh` fait `git add -A`~~ | **fait** |
 
 ---
