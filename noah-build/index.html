@@ -1621,17 +1621,17 @@ const NODE_IMGS = {
 const SHIPS = [
   {id:0,  emoji:'🚀', name:'Seeker One', bonus:1.00, sol:0},
   {id:1,  emoji:'🛸', name:'Phantom',    bonus:1.12, sol:0},
-  {id:2,  emoji:'☄️', name:'Comet',      bonus:1.25, sol:0.15, skr:3800},
-  {id:3,  emoji:'🌌', name:'Nebula',     bonus:1.38, sol:0.30, skr:7500},
-  {id:4,  emoji:'👑', name:'King',       bonus:1.55, sol:0.55, skr:14000},
+  {id:2,  emoji:'☄️', name:'Comet',      bonus:1.25, sol:0.075, skr:1900},
+  {id:3,  emoji:'🌌', name:'Nebula',     bonus:1.38, sol:0.15, skr:3750},
+  {id:4,  emoji:'👑', name:'King',       bonus:1.55, sol:0.275, skr:7000},
   {id:5,  emoji:'👻', name:'Ghost',      bonus:1.70, sol:0},
-  {id:6,  emoji:'🛡️', name:'Warden',     bonus:1.20, sol:0.12, skr:3000},
-  {id:7,  emoji:'🦅', name:'Raptor',     bonus:1.33, sol:0.22, skr:5500},
+  {id:6,  emoji:'🛡️', name:'Warden',     bonus:1.20, sol:0.06, skr:1500},
+  {id:7,  emoji:'🦅', name:'Raptor',     bonus:1.33, sol:0.11, skr:2750},
   {id:8,  emoji:'🌀', name:'Specter',    bonus:1.47, sol:0,
    cond:()=>(S.completedNodes||[]).filter(x=>x>=13).length>=4, condTxt:'4 secteurs CHAOS sécurisés'},
   {id:9,  emoji:'❄️', name:'Wraith',     bonus:1.62, sol:0,
    cond:()=>cleComplete('genesis') && cleComplete('chaos'), condTxt:'les 2 clés reconstituées'},
-  {id:10, emoji:'⚜️', name:'Sovereign',  bonus:1.80, sol:0.85, skr:21000},
+  {id:10, emoji:'⚜️', name:'Sovereign',  bonus:1.80, sol:0.425, skr:10500},
   {id:11, emoji:'🔥', name:'Inferno',    bonus:1.95, sol:0,
    cond:()=>(S.completedNodes||[]).includes(21), condTxt:'NEXUS PRIME terrassé'},
   {id:12, emoji:'🤖', name:'Sentinel',   bonus:1.28, sol:0,
@@ -2154,7 +2154,7 @@ function ico(cle, emoji, taille){
   return img ? '<img src="'+img.src+'" style="width:'+t+'px;height:'+t+'px;object-fit:contain;vertical-align:-3px;display:inline-block">'
              : (emoji||'');
 }
-function toast(m,t=2400){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),t); }
+function toast(m,t=3800){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),t); }
 /* ============================================================
    REGLES — sections depliables, une seule ouverte a la fois
    ============================================================ */
@@ -2256,7 +2256,18 @@ function basculerRegle(i){
 
 function showRules(){ renderRegles(); document.getElementById('modal-rules').classList.add('show'); }
 function closeRules(){ document.getElementById('modal-rules').classList.remove('show'); }
-function vibrate(ms=28){ if(S.prefs&&S.prefs.vibration===false) return; if(navigator.vibrate) navigator.vibrate(ms); }
+/* UI-4 : le navigateur bloque la vibration tant que la page n'a pas ete
+   touchee, et le signale en boucle dans la console — la demo de l'accueil
+   declenche des boss avant toute interaction. On attend le premier geste. */
+let _aInteragi=false;
+/* Garde d'environnement : le harnais de test evalue ce script dans Node, ou
+   addEventListener n'existe pas au niveau global. Sans ce test, le script
+   explose au chargement et les 114 scenarios plantent d'un coup. */
+if(typeof addEventListener==='function'){
+  ['pointerdown','keydown','touchstart'].forEach(ev=>
+    addEventListener(ev, ()=>{ _aInteragi=true; }, {once:true, passive:true}));
+} else { _aInteragi=true; }   /* hors navigateur : rien a proteger */
+function vibrate(ms=28){ if(!_aInteragi) return; if(S.prefs&&S.prefs.vibration===false) return; if(navigator.vibrate) navigator.vibrate(ms); }
 
 /* ============================================================
    AUDIO — 2 canaux (musique / SFX), chargement paresseux,
@@ -6194,6 +6205,13 @@ function draw(){
 function endGame(){
   G.running=false; cancelAnimationFrame(G.raf); stopMusic();
   const g=G;
+  /* UI-5 : la demo est une VRAIE partie, jouee par un pilote automatique avec
+     99 vies. Quand elle bouclait un secteur, endGame se deroulait jusqu'au
+     bout : musique de victoire, toasts, records, et le panneau MISSION
+     REUSSIE par-dessus l'accueil — alors que personne n'avait joue. Le garde
+     existant ne protegeait que la SAUVEGARDE, jamais l'affichage.
+     arreterDemo() restaure l'etat, rend la main a l'accueil et rearme la demo. */
+  if(g.demo){ if(_demoActive) arreterDemo(); else { show('home'); ui(); } return; }
   /* Le mode demo joue sur des secteurs avances (VORTEX, NEXUS, CHAOS...).
      Sa fin de partie ecrivait dans la progression : credits, etoiles,
      contrats, et surtout completedNodes. Resultat : quelques minutes
@@ -6841,7 +6859,10 @@ function tenterVerrouillageComplet(){
   verrouillerPortrait();
   try{
     const d=document.documentElement;
-    if(!document.fullscreenElement && d.requestFullscreen){
+    /* Plein ecran : seulement sur tactile. Sur ordinateur le navigateur
+       le refuse sans geste utilisateur, et l'accepter impose Echap. */
+    if(((navigator.maxTouchPoints||0)>0 || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent||''))
+       && !document.fullscreenElement && d.requestFullscreen){
       d.requestFullscreen({navigationUI:'hide'}).then(verrouillerPortrait).catch(()=>{});
     }
   }catch(e){}

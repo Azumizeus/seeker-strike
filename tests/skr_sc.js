@@ -61,7 +61,12 @@ await unlockShip(6,'skr');
 ataCreee ? ok('compte token de la tresorerie cree automatiquement s\'il manque') : ko('ATA non creee');
 const t=tx.instr.find(i=>i.type==='transfertSPL');
 (t) ? ok('instruction de transfert SPL presente') : ko('pas de transfert SPL');
-(t && t.montant==='3000000000') ? ok('montant brut correct : 3 000 SKR x 10^6') : ko('montant : '+(t||{}).montant);
+/* Le montant attendu se deduit du prix reel : ecrit en dur, il devenait faux
+   des qu'on retouchait la grille tarifaire (ECO-1 l'a casse le 14/08). */
+const brutAttendu = String(Math.round(SHIPS[6].skr * Math.pow(10, SKR.decimales)));
+(t && t.montant===brutAttendu)
+  ? ok('montant brut correct : '+SHIPS[6].skr.toLocaleString()+' SKR x 10^'+SKR.decimales)
+  : ko('montant : '+(t||{}).montant+' au lieu de '+brutAttendu);
 (t && t.mint===mintSKR()) ? ok('transfert sur le bon mint') : ko('mint : '+(t||{}).mint);
 (tx.instr.some(i=>i.type==='memo')) ? ok('memo de tracabilite joint a l\'achat') : ko('memo absent');
 (S.unlocked.includes(6)) ? ok('Warden debloque apres paiement') : ko('vaisseau non debloque');
