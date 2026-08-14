@@ -561,7 +561,7 @@ button:focus-visible,.nav-i:focus-visible,.tgl:focus-visible{outline:2px solid #
 <div id="toast" class="toast"></div>
 
 <!-- ===== ECRAN DE DEMARRAGE ===== -->
-<div id="splash" onclick="quitterSplash()">
+<div id="splash" onclick="window._splashClic=1; typeof quitterSplash==='function' && quitterSplash()">
   <div class="fond"></div>
   <div class="contenu">
     <div class="titre">SEEKER<br>STRIKE</div>
@@ -3721,13 +3721,20 @@ async function rafraichirSoldes(manuel){
   try{
     await Promise.all([lireSoldeSKR(), lireSoldeSOL()]);
     save(); ui();
-    if(manuel) toast('✅ '+S.sol.toFixed(3)+' SOL • '+(S.soldeSkr||0).toFixed(0)+' SKR', 2400);
+    if(manuel) toast('✅ '+S.sol.toFixed(4)+' SOL • '+(S.soldeSkr||0).toFixed(0)+' SKR', 2400);
   }catch(e){
     LOG.warn('[SEEKER] rafraichissement des soldes : '+(e&&e.message));
     if(manuel) toast(T('Lecture impossible, reessaie'), 2400);
   }
 }
 
+/* Apres une transaction, `getBalance` rend encore l'ANCIEN solde : la signature
+   part avant que le reseau ait confirme. Une lecture unique et immediate affiche
+   donc un montant perime, et l'anti-rebond de 3 s empeche la suivante.
+   On relit trois fois en forçant l'anti-rebond, sans toast. */
+function rafraichirApresTx(){
+  [0, 2500, 7000].forEach(d=>setTimeout(()=>{ _majSoldesT=0; rafraichirSoldes(); }, d));
+}
 /* Construit la transaction de la Seeker Task : les 15 memos et le pourboire
    de tresorerie tiennent dans UNE seule transaction, donc UNE seule signature.
    Retourne la liste des instructions. */
@@ -6425,10 +6432,19 @@ function renderShips(){
       : sel
         ? '<div class="mt-2 py-2 text-[11px] font-bold text-green-400">\u2713 \u00c9QUIP\u00c9</div>'
         : '<button onclick="equiperVaisseau('+sh.id+')" class="glass w-full mt-2 py-2 rounded-xl text-[11px] font-bold" style="border-color:rgba(20,241,149,.5);color:#14F195">\u00c9QUIPER</button>';
+    /* Acces direct a la preuve on-chain, comme le journal : un vaisseau paye
+       porte sa signature, autant la rendre cliquable la ou on l'a achete. */
+    const sigShip=(S.signatures||[]).find(x=>String(x.action)==='ship:'+sh.id);
+    const lienTx=(un && sigShip && RE_SIGNATURE.test(String(sigShip.sig||'')))
+      ? '<a href="https://solscan.io/tx/'+encodeURIComponent(sigShip.sig)+'?cluster=devnet" '+
+        'target="_blank" rel="noopener" class="block mt-1.5 text-[9px]" '+
+        'style="color:#14F195;text-decoration:none;opacity:.85">\u2197 '+T('voir la transaction')+'</a>'
+      : '';
     d.innerHTML='<div style="height:58px;display:flex;align-items:center;justify-content:center">'+
         ico('ship'+sh.id, sh.emoji, 50)+'</div>'+
       '<div class="font-semibold text-[12.5px] mt-1">'+sh.name+'</div>'+
       '<div class="text-[10px] text-gray-500">d\u00e9g\u00e2ts \u00d7'+sh.bonus.toFixed(2)+'</div>'+
+      lienTx+
       action;
     g.appendChild(d);
   });
@@ -6603,7 +6619,9 @@ async function donnerSOL(montant){
     S.signatures.unshift({ action:'don:sol', sig, t:Date.now() });
     S.signatures=S.signatures.slice(0,20);
     S.donsSol=+((S.donsSol||0)+montant).toFixed(4);
-    S.sol=Math.max(0, +(S.sol-montant).toFixed(4));
+    /* On ne soustrait plus a la main : S.sol est le solde reel du wallet.
+       C'est la chaine qui fait foi, on la relit. */
+    rafraichirApresTx();
     creditTX(1);
     Audio2.jouerSfx('levelup'); haptique('victoire');
     toast('💜 Merci • '+montant+' SOL reçus', 3400);
@@ -6717,6 +6735,7 @@ async function unlockShip(id, monnaie){
     }
     S.unlocked.push(id);
     S.soldeSkr=Math.max(0,(S.soldeSkr||0)-prix);
+    rafraichirApresTx();         /* idem : on ne se fie pas au calcul local */
     creditTX(1);
     Audio2.jouerSfx('levelup'); haptique('victoire');
     toast('\ud83d\udee0\ufe0f '+sh.name+' d\u00e9bloqu\u00e9 \u2022 -'+prix.toLocaleString()+' SKR', 2800);
@@ -6742,11 +6761,11 @@ async function unlockShip(id, monnaie){
     }
     S.unlocked.push(id);
     creditTX(1);
-    rafraichirSoldes();          /* le solde affiche doit refleter le debit reel */
+    rafraichirApresTx();         /* le debit reel met 1 a 2 s a apparaitre sur la chaine */
     Audio2.jouerSfx('levelup'); haptique('victoire');
     toast('🛠️ '+sh.name+' débloqué • -'+prix+' SOL', 2800);
   }
-  save(); renderShips(); ui();
+  save(); renderShips(); renderJournalTx(); ui();
 }
 
 /* ============================================================
@@ -7183,6 +7202,7 @@ const EN = {
 "Campagne": "Campaign",
 "Genesis Complete": "Genesis Complete",
 "Chaos Complete": "Chaos Complete",
+"voir la transaction": "view transaction",
 "Chasseur de boss": "Boss Hunter",
 "Tueur de titans": "Titan Slayer",
 "Perfectionniste": "Perfectionist",
@@ -8727,7 +8747,7 @@ function ui(){
   }catch(e){}
   const bv=document.getElementById('badge-validateur');
   if(bv) bv.classList.toggle('hidden', !debloque('validateur'));
-  document.getElementById('b-sol').textContent=S.sol.toFixed(2);
+  document.getElementById('b-sol').textContent=S.sol.toFixed(4);
   const bm=document.getElementById('btn-maj-soldes');
   if(bm) bm.classList.toggle('hidden', !S.walletReel);
   const bt=document.getElementById('b-skrtok');
@@ -8750,6 +8770,10 @@ document.getElementById('logo').addEventListener('click',()=>{
 
 load();
 document.addEventListener('gesturestart',e=>e.preventDefault());
+/* Le splash est cliquable des l'affichage du HTML, alors que ce script fait
+   3 Mo et n'est evalue qu'ensuite : le clic partait dans le vide (et levait
+   une ReferenceError). On memorise le clic trop tot et on l'honore ici. */
+try{ if(window._splashClic && typeof quitterSplash==='function') quitterSplash(); }catch(e){}
 </script>
 </body>
 </html>
