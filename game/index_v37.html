@@ -1621,17 +1621,17 @@ const NODE_IMGS = {
 const SHIPS = [
   {id:0,  emoji:'🚀', name:'Seeker One', bonus:1.00, sol:0},
   {id:1,  emoji:'🛸', name:'Phantom',    bonus:1.12, sol:0},
-  {id:2,  emoji:'☄️', name:'Comet',      bonus:1.25, sol:0.075, skr:1900},
-  {id:3,  emoji:'🌌', name:'Nebula',     bonus:1.38, sol:0.15, skr:3750},
-  {id:4,  emoji:'👑', name:'King',       bonus:1.55, sol:0.275, skr:7000},
+  {id:2,  emoji:'☄️', name:'Comet',      bonus:1.25, sol:0.05, skr:1250},
+  {id:3,  emoji:'🌌', name:'Nebula',     bonus:1.38, sol:0.11, skr:2750},
+  {id:4,  emoji:'👑', name:'King',       bonus:1.55, sol:0.20, skr:5000},
   {id:5,  emoji:'👻', name:'Ghost',      bonus:1.70, sol:0},
-  {id:6,  emoji:'🛡️', name:'Warden',     bonus:1.20, sol:0.06, skr:1500},
-  {id:7,  emoji:'🦅', name:'Raptor',     bonus:1.33, sol:0.11, skr:2750},
+  {id:6,  emoji:'🛡️', name:'Warden',     bonus:1.20, sol:0.03, skr:750},
+  {id:7,  emoji:'🦅', name:'Raptor',     bonus:1.33, sol:0.07, skr:1750},
   {id:8,  emoji:'🌀', name:'Specter',    bonus:1.47, sol:0,
    cond:()=>(S.completedNodes||[]).filter(x=>x>=13).length>=4, condTxt:'4 secteurs CHAOS sécurisés'},
   {id:9,  emoji:'❄️', name:'Wraith',     bonus:1.62, sol:0,
    cond:()=>cleComplete('genesis') && cleComplete('chaos'), condTxt:'les 2 clés reconstituées'},
-  {id:10, emoji:'⚜️', name:'Sovereign',  bonus:1.80, sol:0.425, skr:10500},
+  {id:10, emoji:'⚜️', name:'Sovereign',  bonus:1.80, sol:0.33, skr:8250},
   {id:11, emoji:'🔥', name:'Inferno',    bonus:1.95, sol:0,
    cond:()=>(S.completedNodes||[]).includes(21), condTxt:'NEXUS PRIME terrassé'},
   {id:12, emoji:'🤖', name:'Sentinel',   bonus:1.28, sol:0,
@@ -6438,12 +6438,12 @@ function renderShips(){
       ? '<div class="mt-2 py-1.5 text-[9.5px]" style="color:#8b8b9e;line-height:1.4">🔒 '+sh.condTxt+'</div>'
       : !un
       ? /* Deux moyens de paiement : SOL, ou le token SKR de Solana Mobile. */
-        '<div class="mt-2 flex gap-1.5">'+
+        '<div class="mt-2 flex gap-1.5 items-stretch">'+
           '<button onclick="unlockShip('+sh.id+',\'sol\')" class="btn flex-1 py-2 rounded-xl text-[10.5px] font-bold"'+
             (S.sol<(sh.sol||0)?' style="opacity:.5"':'')+'>'+(sh.sol||0)+' SOL</button>'+
           '<button onclick="unlockShip('+sh.id+',\'skr\')" class="glass flex-1 py-2 rounded-xl text-[10.5px] font-bold" '+
             'title="'+(skrIndisponible()?T('Disponible au lancement mainnet'):'')+'" '+
-            'style="border-color:rgba(20,241,149,.5);color:#14F195'+
+            'style="border-color:rgba(20,241,149,.5);color:#14F195;white-space:nowrap'+
             ((skrIndisponible() || (S.soldeSkr||0)<(sh.skr||0))?';opacity:.45':'')+'">'+
             (sh.skr||0).toLocaleString()+' SKR'+(skrIndisponible()?'<br><span style="font-size:8px;color:#7c7a8c;font-weight:500">'+T('mainnet')+'</span>':'')+'</button>'+
         '</div>'
