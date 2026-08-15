@@ -12,8 +12,15 @@ const src=_f.readFileSync(_cand.find(p=>_f.existsSync(p))||_cand[0],'utf8');
 /* --- 1. Sortie de demo : on revient a l'accueil, pas au splash --- */
 (/el\.classList\.add\('parti'\); el\.style\.display='none';/.test(src))
   ? ok('sortie de demo : le splash est masque, pas rappele') : ko('le splash revient par-dessus tout');
-(/_splashParti=true;\s*\n\s*show\('home'\)/.test(src))
-  ? ok('sortie de demo : retour direct a l\'accueil') : ko('pas de retour a l\'accueil');
+/* UI-6 : la sortie de demo repasse par le flux normal — choix de langue au
+   premier lancement, puis tutoriel, sinon accueil. Ce qui compte n'est pas la
+   ligne exacte (le test verifiait la forme du code) mais qu'on aboutisse bien
+   a l'accueil sans rappeler le splash. */
+(/_splashParti=true;[\s\S]{0,500}?show\('home'\)/.test(src))
+  ? ok('sortie de demo : retour a l\'accueil') : ko('pas de retour a l\'accueil');
+(/_splashParti=true;[\s\S]{0,500}?langueDejaChoisie\(\)/.test(src))
+  ? ok('sortie de demo : le choix de langue et le tutoriel sont preserves')
+  : ko('la demo saute encore le choix de langue');
 
 /* --- 2. Tout geste arrete la demo --- */
 ['touchstart','mousedown','keydown','wheel','pointerdown'].forEach(ev=>{
