@@ -30,6 +30,5 @@ chantiers en cours restent en local et ne sont pas suivis par git.
 ## Jouer
 
 **En ligne** : https://azumizeus.github.io/seeker-strike/
-**Miroir** : https://seeker-strike.netlify.app
 
 Aucune installation, aucun build : le jeu tient dans un seul fichier HTML.

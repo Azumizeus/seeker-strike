@@ -7,7 +7,6 @@ Un seul fichier HTML, aucune installation, aucune dépendance.
 
 **https://azumizeus.github.io/seeker-strike/**
 
-Miroir : https://seeker-strike.netlify.app
 
 ---
 
